@@ -1,0 +1,28 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 336px;
+  height: 262px;
+  overflow: hidden;
+  background-color: #000;
+}
+
+#app {
+  width: 336px;
+  height: 262px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Kaplay injects a <canvas> into #app — make sure it fills exactly */
+#app canvas {
+  display: block;
+  width: 336px !important;
+  height: 262px !important;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
