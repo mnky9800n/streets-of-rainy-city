@@ -96,6 +96,70 @@ function zFromY(y: number): number {
 
 k.loadSprite('startscreen', '/startscreen.png')
 
+k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
+    sliceX: 8,
+    sliceY: 1,
+    anims: {
+        idle: { from: 0, to: 7, loop: true },
+    },
+})
+
+k.loadSprite('jennifer-walk', '/sprites/jennifer/jennifer-walk.png', {
+    sliceX: 4,
+    sliceY: 2,
+    anims: {
+        walk: { from: 0, to: 7, loop: true },
+    },
+})
+
+k.loadSprite('jennifer-punch', '/sprites/jennifer/jennifer-punch.png', {
+    sliceX: 6,
+    sliceY: 2,
+    anims: {
+        punch: { from: 0, to: 11, loop: false },
+    },
+})
+
+k.loadSprite('jennifer-jump', '/sprites/jennifer/jennifer-jump.png', {
+    sliceX: 4,
+    sliceY: 1,
+    anims: {
+        jump: { from: 0, to: 3, loop: false },
+    },
+})
+
+k.loadSprite('jennifer-jumpkick', '/sprites/jennifer/jennifer-jumpkick.png', {
+    sliceX: 4,
+    sliceY: 1,
+    anims: {
+        jumpkick: { from: 0, to: 3, loop: false },
+    },
+})
+
+k.loadSprite('jennifer-hit', '/sprites/jennifer/jennifer-hit.png', {
+    sliceX: 4,
+    sliceY: 1,
+    anims: {
+        hit: { from: 0, to: 3, loop: false },
+    },
+})
+
+k.loadSprite('jennifer-knockback', '/sprites/jennifer/jennifer-knockback.png', {
+    sliceX: 3,
+    sliceY: 2,
+    anims: {
+        knockback: { from: 0, to: 5, loop: false },
+    },
+})
+
+k.loadSprite('jennifer-death', '/sprites/jennifer/jennifer-death.png', {
+    sliceX: 4,
+    sliceY: 2,
+    anims: {
+        death: { from: 0, to: 7, loop: false },
+    },
+})
+
 // ---------------------------------------------------------------------------
 // Title Scene
 // ---------------------------------------------------------------------------
@@ -585,6 +649,8 @@ k.scene('game', () => {
         hitFlashTimer: number
 
         scrollLimitX: number
+
+        currentAnim: string
     }
 
     const ps: PlayerState = {
@@ -613,6 +679,8 @@ k.scene('game', () => {
         hitFlashTimer: 0,
 
         scrollLimitX: WORLD_SECTION_W - PLAYER_W,
+
+        currentAnim: 'idle',
     }
 
     const playerShadow = k.add([
@@ -624,13 +692,24 @@ k.scene('game', () => {
         k.z(zFromY(ps.groundY) - 1),
     ]) as FadeRectObj
 
+    // Jennifer sprite frames are 192×1024 (1-row sheets) or 384×512 (2-row sheets).
+    // We want the rendered height to match PLAYER_H (30px).
+    // 1-row sheets: scale = 30 / 1024 ≈ 0.0293
+    // Using a single scale constant works because we swap the whole sprite component
+    // when the animation changes, so Kaplay re-measures the new frame dimensions.
+    const JENNIFER_SCALE_1ROW = PLAYER_H / 1024
+    const JENNIFER_SCALE_2ROW = PLAYER_H / 512
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const player = k.add([
-        k.rect(PLAYER_W, PLAYER_H),
-        k.color(rgb(...COL_PLAYER)),
+        k.sprite('jennifer-idle'),
+        k.scale(JENNIFER_SCALE_1ROW),
         k.pos(60, ps.groundY),
         k.anchor('bot'),
         k.z(zFromY(ps.groundY)),
-    ]) as RectObj
+    ]) as any
+
+    player.play('idle')
 
     // ------------------------------------------------------------------
     // Wave management
@@ -716,7 +795,6 @@ k.scene('game', () => {
         ps.hp = Math.max(0, ps.hp - damage)
         ps.hitFlash = true
         ps.hitFlashTimer = HIT_FLASH_DURATION
-        player.color = rgb(...COL_HIT_FLASH)
         ps.knockback = true
         ps.knockbackTimer = KNOCKBACK_DURATION
         ps.knockbackDir = knockbackDir
@@ -761,7 +839,6 @@ k.scene('game', () => {
             ps.hitFlashTimer -= dt
             if (ps.hitFlashTimer <= 0) {
                 ps.hitFlash = false
-                player.color = rgb(...COL_PLAYER)
             }
         }
 
@@ -794,7 +871,6 @@ k.scene('game', () => {
             ps.punchTimer -= dt
             if (ps.punchTimer <= 0) {
                 ps.punchActive = false
-                player.color = rgb(...COL_PLAYER)
             }
         }
 
@@ -805,7 +881,6 @@ k.scene('game', () => {
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION * 1.5
                 ps.punchDir = ps.facingRight ? 1 : -1
-                player.color = rgb(180, 220, 255)
                 performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18, true)
             } else if (ps.grounded) {
                 ps.comboCount = (ps.comboCount % 3) + 1
@@ -813,7 +888,6 @@ k.scene('game', () => {
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION
                 ps.punchDir = ps.facingRight ? 1 : -1
-                player.color = rgb(180, 220, 255)
                 const isFinisher = ps.comboCount === 3
                 performPunchHit(PUNCH_REACH, ps.punchDir, isFinisher ? 20 : 8, isFinisher)
             }
@@ -845,6 +919,57 @@ k.scene('game', () => {
         playerShadow.pos.x = player.pos.x
         playerShadow.pos.y = ps.groundY
         playerShadow.z = player.z - 1
+
+        // --- Player animation ---
+        {
+            const isDead = ps.hp <= 0
+            let nextAnim: string
+            let nextSprite: string
+
+            if (isDead) {
+                nextAnim   = 'death'
+                nextSprite = 'jennifer-death'
+            } else if (ps.knockback) {
+                nextAnim   = 'knockback'
+                nextSprite = 'jennifer-knockback'
+            } else if (ps.hitFlash) {
+                nextAnim   = 'hit'
+                nextSprite = 'jennifer-hit'
+            } else if (ps.punchActive && !ps.grounded) {
+                nextAnim   = 'jumpkick'
+                nextSprite = 'jennifer-jumpkick'
+            } else if (ps.punchActive) {
+                nextAnim   = 'punch'
+                nextSprite = 'jennifer-punch'
+            } else if (!ps.grounded) {
+                nextAnim   = 'jump'
+                nextSprite = 'jennifer-jump'
+            } else if (k.isKeyDown('left') || k.isKeyDown('a') || k.isKeyDown('right') || k.isKeyDown('d') ||
+                       k.isKeyDown('up')   || k.isKeyDown('w') || k.isKeyDown('down')  || k.isKeyDown('s') ||
+                       PLAYER_1.DPAD.left || PLAYER_1.DPAD.right || PLAYER_1.DPAD.up || PLAYER_1.DPAD.down) {
+                nextAnim   = 'walk'
+                nextSprite = 'jennifer-walk'
+            } else {
+                nextAnim   = 'idle'
+                nextSprite = 'jennifer-idle'
+            }
+
+            if (nextAnim !== ps.currentAnim) {
+                ps.currentAnim = nextAnim
+                const scale = (nextSprite === 'jennifer-walk'      ||
+                               nextSprite === 'jennifer-punch'     ||
+                               nextSprite === 'jennifer-knockback' ||
+                               nextSprite === 'jennifer-death')
+                    ? JENNIFER_SCALE_2ROW
+                    : JENNIFER_SCALE_1ROW
+                player.use(k.sprite(nextSprite))
+                player.use(k.scale(scale))
+                player.play(nextAnim)
+            }
+
+            // Flip sprite to face correct direction
+            player.flipX = !ps.facingRight
+        }
 
         // --- Camera ---
         const camX = Math.max(CANVAS_W / 2, Math.min(totalWorldW - CANVAS_W / 2, player.pos.x))
