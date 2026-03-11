@@ -138,17 +138,25 @@ k.scene('title', () => {
 
     let flashTimer = 0
     let visible = true
+    let idleTimer = 0
 
     k.onUpdate(() => {
-        flashTimer += k.dt()
+        const dt = k.dt()
+        flashTimer += dt
         if (flashTimer > 0.5) {
             flashTimer = 0
             visible = !visible
             pressStart.opacity = visible ? 1 : 0
         }
+
+        // After 10 seconds of no input, show attract mode (story crawl)
+        idleTimer += dt
+        if (idleTimer > 10) k.go('intro')
+
         if (SYSTEM.ONE_PLAYER) k.go('video')
     })
 
+    // Any key press resets idle and starts the game
     k.onKeyPress('enter', () => k.go('video'))
     k.onKeyPress('space', () => k.go('video'))
 })
@@ -176,17 +184,17 @@ k.scene('video', () => {
 
     video.play()
 
-    // When the video ends, clean up and go to intro
+    // When the video ends, clean up and go to level start
     video.addEventListener('ended', () => {
         video.remove()
-        k.go('intro')
+        k.go('levelstart')
     })
 
     // Allow skipping with start/enter/space
     function skip() {
         video.pause()
         video.remove()
-        k.go('intro')
+        k.go('levelstart')
     }
 
     k.onKeyPress('enter', skip)
@@ -199,6 +207,75 @@ k.scene('video', () => {
     // Clean up if scene changes unexpectedly
     k.onSceneLeave(() => {
         video.remove()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Level Start Scene (Sonic-style level title card)
+// ---------------------------------------------------------------------------
+
+k.scene('levelstart', () => {
+    // Black background
+    k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(0, 0, 0)), k.pos(0, 0), k.fixed()])
+
+    // Level name slides in from the left
+    const levelName = k.add([
+        k.text('Bridge Street', { size: 28 }),
+        k.pos(-300, CANVAS_H / 2 - 20),
+        k.anchor('center'),
+        k.color(rgb(255, 220, 50)),
+        k.fixed(),
+    ])
+
+    // Subtitle slides in from the right
+    const subtitle = k.add([
+        k.text('Stage 1', { size: 12 }),
+        k.pos(CANVAS_W + 200, CANVAS_H / 2 + 18),
+        k.anchor('center'),
+        k.color(rgb(200, 200, 220)),
+        k.fixed(),
+    ])
+
+    // Horizontal divider line
+    const divider = k.add([
+        k.rect(0, 2),
+        k.pos(CANVAS_W / 2, CANVAS_H / 2 + 2),
+        k.anchor('center'),
+        k.color(rgb(255, 220, 50)),
+        k.fixed(),
+    ])
+
+    let timer = 0
+    const SLIDE_DURATION = 0.5
+    const HOLD_DURATION = 2.0
+    const FADE_DURATION = 0.4
+    const TOTAL = SLIDE_DURATION + HOLD_DURATION + FADE_DURATION
+
+    k.onUpdate(() => {
+        const dt = k.dt()
+        timer += dt
+
+        if (timer < SLIDE_DURATION) {
+            // Slide in phase
+            const t = timer / SLIDE_DURATION
+            const ease = 1 - Math.pow(1 - t, 3) // ease-out cubic
+            levelName.pos.x = -300 + (CANVAS_W / 2 + 300) * ease
+            subtitle.pos.x = (CANVAS_W + 200) - (200 + CANVAS_W / 2) * ease
+            divider.width = 200 * ease
+        } else if (timer < SLIDE_DURATION + HOLD_DURATION) {
+            // Hold phase — everything stays
+            levelName.pos.x = CANVAS_W / 2
+            subtitle.pos.x = CANVAS_W / 2
+            divider.width = 200
+        } else if (timer < TOTAL) {
+            // Fade out phase
+            const t = (timer - SLIDE_DURATION - HOLD_DURATION) / FADE_DURATION
+            levelName.opacity = 1 - t
+            subtitle.opacity = 1 - t
+            divider.opacity = 1 - t
+        } else {
+            k.go('game')
+        }
     })
 })
 
@@ -248,7 +325,7 @@ k.scene('intro', () => {
 
     // "PRESS START" hint at the bottom so the player knows they can skip.
     const hint = k.add([
-        k.text('PRESS START / ENTER / SPACE TO SKIP', { size: 6, align: 'center' }),
+        k.text('PRESS START', { size: 6, align: 'center' }),
         k.pos(CANVAS_W / 2, CANVAS_H - 10),
         k.anchor('bot'),
         k.color(rgb(120, 110, 110)),
@@ -260,7 +337,7 @@ k.scene('intro', () => {
     let hintFlashTimer = 0
     let hintVisible    = true
 
-    function goToGame() { k.go('game') }
+    function goToTitle() { k.go('title') }
 
     k.onUpdate(() => {
         const dt = k.dt()
@@ -276,16 +353,15 @@ k.scene('intro', () => {
             hint.opacity   = hintVisible ? 1 : 0
         }
 
-        // Transition once the entire block has scrolled above the top edge.
-        // crawl.height gives us the rendered height of the text block.
-        if (crawl.pos.y + crawl.height < 0) goToGame()
+        // Loop back to title once the text has fully scrolled off.
+        if (crawl.pos.y + crawl.height < 0) goToTitle()
 
-        // Arcade cabinet "Start" button skips the crawl.
-        if (SYSTEM.ONE_PLAYER) goToGame()
+        // Pressing start returns to title.
+        if (SYSTEM.ONE_PLAYER) goToTitle()
     })
 
-    k.onKeyPress('enter', goToGame)
-    k.onKeyPress('space', goToGame)
+    k.onKeyPress('enter', goToTitle)
+    k.onKeyPress('space', goToTitle)
 })
 
 // ---------------------------------------------------------------------------
