@@ -1,5 +1,7 @@
 # Streets of rainy-city.com
 
+![Start Screen](public/startscreen.png)
+
 An evil satanic cult has taken rainy-city.com and kidnapped your girlfriend while you were out buying a pizza! Taken to the pits of hell that have opened in the caverns beneath the city by the Followers of Baal, a new gang that has taken over crime across the city. They have kidnapped your girlfriend for The Final Sacrifice which will unleash the horde and break the final seal unleashing Baal’s satanic forces across rainy-city.com to conquer the lands and bring about eternal hell. Only you, and your trusty kung-fu powers, can defeat them and save your girlfriend before the pizza gets cold!
 
 ## About RCade
