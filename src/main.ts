@@ -101,6 +101,7 @@ function zFromY(y: number): number {
 // ---------------------------------------------------------------------------
 
 k.loadSprite('startscreen', '/startscreen.png')
+k.loadSprite('bridgestreet-bg', '/bridgestreet/bridge-street-bg.png')
 k.loadSound('titlemusic', '/Bridge Street Run.mp3')
 
 k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
@@ -464,50 +465,14 @@ k.scene('game', () => {
     const totalWorldW = CANVAS_W * NUM_SECTIONS
 
     // ------------------------------------------------------------------
-    // World geometry
+    // World geometry (background image)
     // ------------------------------------------------------------------
 
-    k.add([k.rect(totalWorldW, STREET_Y_TOP), k.color(rgb(...COL_SKY)), k.pos(0, 0), k.z(0)])
-
-    const buildings: Array<{ x: number; w: number; h: number }> = [
-        { x: 0,    w: 60,  h: 90  }, { x: 70,   w: 80,  h: 70  },
-        { x: 160,  w: 50,  h: 110 }, { x: 220,  w: 70,  h: 80  },
-        { x: 300,  w: 90,  h: 95  }, { x: 400,  w: 60,  h: 75  },
-        { x: 480,  w: 100, h: 100 }, { x: 600,  w: 80,  h: 85  },
-        { x: 700,  w: 70,  h: 65  }, { x: 780,  w: 110, h: 105 },
-        { x: 900,  w: 60,  h: 90  }, { x: 1000, w: 90,  h: 80  },
-        { x: 1100, w: 70,  h: 95  }, { x: 1200, w: 80,  h: 70  },
-        { x: 1300, w: 60,  h: 100 }, { x: 1400, w: 90,  h: 85  },
-        { x: 1500, w: 70,  h: 90  },
-    ]
-
-    for (const b of buildings) {
-        const top = STREET_Y_TOP - b.h
-        k.add([k.rect(b.w, b.h), k.color(rgb(...COL_BUILDING)), k.pos(b.x, top), k.z(1)])
-        for (let wy = top + 8; wy < top + b.h - 8; wy += 18) {
-            for (let wx = b.x + 6; wx < b.x + b.w - 6; wx += 14) {
-                if (Math.random() > 0.4) {
-                    k.add([k.rect(8, 10), k.color(rgb(200, 180, 80)), k.pos(wx, wy), k.z(2)])
-                }
-            }
-        }
-    }
-
     k.add([
-        k.rect(totalWorldW, STREET_Y_BOTTOM - STREET_Y_TOP + 30),
-        k.color(rgb(...COL_STREET)),
-        k.pos(0, STREET_Y_TOP),
-        k.z(3),
+        k.sprite('bridgestreet-bg', { width: totalWorldW, height: CANVAS_H }),
+        k.pos(0, 0),
+        k.z(0),
     ])
-
-    for (let lane = 0; lane <= 3; lane++) {
-        const ly = STREET_Y_TOP + lane * ((STREET_Y_BOTTOM - STREET_Y_TOP) / 3)
-        for (let x = 0; x < totalWorldW; x += 30) {
-            k.add([k.rect(18, 1), k.color(rgb(100, 100, 100)), k.pos(x, ly), k.z(4)])
-        }
-    }
-
-    k.add([k.rect(totalWorldW, 42), k.color(rgb(60, 55, 55)), k.pos(0, STREET_Y_BOTTOM), k.z(3)])
 
     // ------------------------------------------------------------------
     // HUD
