@@ -35,6 +35,11 @@ const KNOCKBACK_SPEED    = 150
 const KNOCKBACK_DURATION = 0.25
 const HIT_FLASH_DURATION = 0.12
 
+const POWER_UP_DURATION    = 6.0   // seconds the power-up lasts
+const POWER_UP_COOLDOWN    = 18.0  // seconds before it can be used again
+const POWER_UP_WINDOW      = 0.1   // seconds within which both buttons must be pressed
+const POWER_UP_DAMAGE_MULT = 2     // damage multiplier while powered up
+
 const ENEMY_W              = 18
 const ENEMY_H              = 28
 const ENEMY_SPEED          = 42
@@ -47,8 +52,9 @@ const ENEMY_AGGRO_RANGE    = 160
 const WORLD_SECTION_W = 336
 const NUM_SECTIONS    = 5
 
-const COL_PLAYER:    [number, number, number] = [52,  152, 219]
-const COL_ENEMY:     [number, number, number] = [231, 76,  60]
+const COL_PLAYER:        [number, number, number] = [52,  152, 219]
+const COL_ENEMY:         [number, number, number] = [231, 76,  60]
+const COL_POWER_UP_AURA: [number, number, number] = [80,  160, 255]
 const COL_STREET:    [number, number, number] = [80,  80,  80]
 const COL_BUILDING:  [number, number, number] = [45,  45,  45]
 const COL_SKY:       [number, number, number] = [20,  20,  40]
@@ -375,8 +381,8 @@ k.scene('intro', () => {
         // 'Taken to the pits of hell that have opened in the caverns beneath ' +
         // 'the city by the Followers of Baal, a new gang that has taken over ' +
         // 'crime across the city.\n\n' +
-        'Your girlfriend will be ' +
-        'The Final Sacrifice!\n\n ' +
+        'Your girlfriend will be\n' +
+        'The Final Sacrifice!\n\n' +
         // 'satanic forces across rainy-city.com to conquer the lands and bring ' +
         // 'about eternal hell.\n\n' +
         'Only you, and your trusty kung-fu powers, can defeat them and save ' +
@@ -528,6 +534,28 @@ k.scene('game', () => {
         k.z(102),
     ])
 
+    // Power-up HUD: "POWER UP!" flashes in the top-centre while active.
+    const powerUpLabel = k.add([
+        k.text('POWER UP!', { size: 9 }),
+        k.pos(CANVAS_W / 2, 10),
+        k.anchor('top'),
+        k.color(rgb(...COL_POWER_UP_AURA)),
+        k.opacity(0),
+        k.fixed(),
+        k.z(102),
+    ])
+
+    // "READY" indicator shown when power-up is off cooldown but not yet active.
+    const powerReadyLabel = k.add([
+        k.text('PWR RDY', { size: 7 }),
+        k.pos(CANVAS_W / 2, 10),
+        k.anchor('top'),
+        k.color(rgb(160, 200, 255)),
+        k.opacity(1),
+        k.fixed(),
+        k.z(102),
+    ])
+
     // ------------------------------------------------------------------
     // Wave definitions
     // ------------------------------------------------------------------
@@ -669,6 +697,12 @@ k.scene('game', () => {
         hitFlash: boolean
         hitFlashTimer: number
 
+        powerUp: boolean
+        powerUpTimer: number
+        powerUpCooldown: number
+        lastAPressTime: number
+        lastBPressTime: number
+
         scrollLimitX: number
 
         currentAnim: string
@@ -699,6 +733,12 @@ k.scene('game', () => {
         hitFlash: false,
         hitFlashTimer: 0,
 
+        powerUp: false,
+        powerUpTimer: 0,
+        powerUpCooldown: 0,
+        lastAPressTime: -999,
+        lastBPressTime: -999,
+
         scrollLimitX: WORLD_SECTION_W - PLAYER_W,
 
         currentAnim: 'idle',
@@ -712,6 +752,20 @@ k.scene('game', () => {
         k.anchor('center'),
         k.z(zFromY(ps.groundY) - 1),
     ]) as FadeRectObj
+
+    // Pulsing blue aura drawn just behind the player; visible only during power-up.
+    const AURA_W = PLAYER_W + 14
+    const AURA_H = PLAYER_H + 14
+    const playerAura = k.add([
+        k.rect(AURA_W, AURA_H),
+        k.color(rgb(...COL_POWER_UP_AURA)),
+        k.opacity(0),
+        k.pos(60, ps.groundY),
+        k.anchor('bot'),
+        k.z(zFromY(ps.groundY) - 0.5),
+    ]) as FadeRectObj
+
+    let auraTime = 0   // drives the sine pulse
 
     // All sprite frames are 256px tall. Scale to 3x PLAYER_H (90px in-game).
     const JENNIFER_SCALE = (PLAYER_H * 3) / 256
@@ -840,8 +894,67 @@ k.scene('game', () => {
         const down  = PLAYER_1.DPAD.down  || k.isKeyDown('down')  || k.isKeyDown('s')
         const left  = PLAYER_1.DPAD.left  || k.isKeyDown('left')  || k.isKeyDown('a')
         const right = PLAYER_1.DPAD.right || k.isKeyDown('right') || k.isKeyDown('d')
-        const fireA = pressedA || k.isKeyPressed('z') || k.isKeyPressed('j')
-        const fireB = pressedB || k.isKeyPressed('x') || k.isKeyPressed('k')
+        let fireA = pressedA || k.isKeyPressed('z') || k.isKeyPressed('j')
+        let fireB = pressedB || k.isKeyPressed('x') || k.isKeyPressed('k')
+
+        // --- Power-up activation detection ---
+        // Record the moment each button was last pressed so we can check
+        // whether both were pressed within POWER_UP_WINDOW seconds of each other.
+        const now = k.time()
+        if (fireA) ps.lastAPressTime = now
+        if (fireB) ps.lastBPressTime = now
+
+        const simultaneousPress =
+            (fireA && Math.abs(now - ps.lastBPressTime) <= POWER_UP_WINDOW) ||
+            (fireB && Math.abs(now - ps.lastAPressTime) <= POWER_UP_WINDOW)
+
+        if (simultaneousPress && !ps.powerUp && ps.powerUpCooldown <= 0) {
+            ps.powerUp      = true
+            ps.powerUpTimer = POWER_UP_DURATION
+            // Consume both button presses so the frame's individual actions
+            // (jump, punch) do not fire alongside the power-up activation.
+            fireA = false
+            fireB = false
+            // Invalidate recorded press times to prevent immediate re-trigger.
+            ps.lastAPressTime = -999
+            ps.lastBPressTime = -999
+        }
+
+        // --- Power-up timer and cooldown ---
+        if (ps.powerUp) {
+            ps.powerUpTimer -= dt
+            if (ps.powerUpTimer <= 0) {
+                ps.powerUp        = false
+                ps.powerUpCooldown = POWER_UP_COOLDOWN
+                player.color      = rgb(255, 255, 255)
+            } else {
+                player.color = rgb(...COL_POWER_UP_AURA)
+            }
+        } else if (ps.powerUpCooldown > 0) {
+            ps.powerUpCooldown -= dt
+        }
+
+        // --- Aura visual ---
+        if (ps.powerUp) {
+            auraTime += dt
+            const pulse = 0.25 + 0.25 * Math.sin(auraTime * 8)
+            playerAura.opacity  = pulse
+            playerAura.pos.x    = player.pos.x
+            playerAura.pos.y    = ps.visualY
+            playerAura.z        = player.z - 0.5
+        } else {
+            playerAura.opacity = 0
+        }
+
+        // --- Power-up HUD labels ---
+        if (ps.powerUp) {
+            const hudPulse = 0.6 + 0.4 * Math.sin(auraTime * 6)
+            powerUpLabel.opacity    = hudPulse
+            powerReadyLabel.opacity = 0
+        } else {
+            powerUpLabel.opacity    = 0
+            powerReadyLabel.opacity = ps.powerUpCooldown <= 0 ? 1 : 0
+        }
 
         // --- Player knockback ---
         if (ps.knockback) {
@@ -891,13 +1004,14 @@ k.scene('game', () => {
         }
 
         // --- Initiate attack ---
+        const dmgMult = ps.powerUp ? POWER_UP_DAMAGE_MULT : 1
         if (fireA && !ps.punchActive && !ps.knockback) {
             if (!ps.grounded && !ps.jumpKickUsed) {
                 ps.jumpKickUsed = true
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION * 1.5
                 ps.punchDir = ps.facingRight ? 1 : -1
-                performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18, true)
+                performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18 * dmgMult, true)
             } else if (ps.grounded) {
                 ps.comboCount = (ps.comboCount % 3) + 1
                 ps.comboTimer = COMBO_WINDOW
@@ -905,7 +1019,7 @@ k.scene('game', () => {
                 ps.punchTimer = PUNCH_DURATION
                 ps.punchDir = ps.facingRight ? 1 : -1
                 const isFinisher = ps.comboCount === 3
-                performPunchHit(PUNCH_REACH, ps.punchDir, isFinisher ? 20 : 8, isFinisher)
+                performPunchHit(PUNCH_REACH, ps.punchDir, (isFinisher ? 20 : 8) * dmgMult, isFinisher)
             }
         }
 
@@ -1103,16 +1217,16 @@ k.scene('gameover', () => {
     ])
 
     k.add([
-        k.text('Your girlfriend awaits...', { size: 8 }),
-        k.pos(CANVAS_W / 2, 132),
+        k.text('Your girlfriend awaits...', { size: 14 }),
+        k.pos(CANVAS_W / 2, 140),
         k.anchor('center'),
         k.color(rgb(180, 160, 160)),
         k.fixed(),
     ])
 
     k.add([
-        k.text('And the pizza is getting cold.', { size: 8 }),
-        k.pos(CANVAS_W / 2, 147),
+        k.text('And the pizza is getting cold.', { size: 14 }),
+        k.pos(CANVAS_W / 2, 162),
         k.anchor('center'),
         k.color(rgb(180, 160, 160)),
         k.fixed(),
