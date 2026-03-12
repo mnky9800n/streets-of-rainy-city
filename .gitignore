@@ -24,3 +24,16 @@ dist-ssr
 *.sln
 *.sw?
 CLAUDE.md
+
+# Sprite source files (keep locally, don't upload)
+public/sprites/**/poses/
+
+# AI generation intermediates
+*-out.png
+stitched-bg.png
+
+# Reference images (not needed for game)
+public/bridgestreet/Screenshot*
+public/bridgestreet/sections/
+public/bridgestreet/bridge-street-bg-blended.png
+public/bridgestreet/rc-logo.png
