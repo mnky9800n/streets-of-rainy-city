@@ -114,8 +114,8 @@ k.loadSprite('jennifer-walk', '/sprites/jennifer/jennifer-walk.png', {
 })
 
 k.loadSprite('jennifer-punch', '/sprites/jennifer/jennifer-punch.png', {
-    sliceX: 12,
-    sliceY: 1,
+    sliceX: 6,
+    sliceY: 2,
     anims: {
         punch: { from: 0, to: 11, loop: false },
     },
@@ -162,17 +162,29 @@ k.loadSprite('jennifer-death', '/sprites/jennifer/jennifer-death.png', {
 })
 
 // ---------------------------------------------------------------------------
+// Title music state (persists across title ↔ intro attract loop)
+// ---------------------------------------------------------------------------
+
+let titleMusic: ReturnType<typeof k.play> | null = null
+
+function stopTitleMusic() {
+    if (titleMusic) {
+        titleMusic.stop()
+        titleMusic = null
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Title Scene
 // ---------------------------------------------------------------------------
 
 k.scene('title', () => {
     k.add([k.sprite('startscreen', { width: CANVAS_W, height: CANVAS_H }), k.pos(0, 0), k.fixed()])
 
-    const music = k.play('titlemusic')
-
-    k.onSceneLeave(() => {
-        music.stop()
-    })
+    // Only start music if not already playing (persists through attract mode)
+    if (!titleMusic || titleMusic.paused) {
+        titleMusic = k.play('titlemusic')
+    }
 
     // k.add([
     //     k.text('STREETS OF\nRAINY CITY', { size: 28, align: 'center' }),
@@ -237,6 +249,8 @@ k.scene('title', () => {
 // ---------------------------------------------------------------------------
 
 k.scene('video', () => {
+    stopTitleMusic()
+
     // Black background while video loads
     k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(0, 0, 0)), k.pos(0, 0), k.fixed()])
 
@@ -699,10 +713,8 @@ k.scene('game', () => {
         k.z(zFromY(ps.groundY) - 1),
     ]) as FadeRectObj
 
-    // Most sprite sheets are 1536px tall per frame, knockback is 1024px.
-    // Scale to match PLAYER_H (30px).
-    const JENNIFER_SCALE = PLAYER_H / 1536
-    const JENNIFER_SCALE_KNOCKBACK = PLAYER_H / 1024
+    // All sprite frames are 256px tall. Scale to 3x PLAYER_H (90px in-game).
+    const JENNIFER_SCALE = (PLAYER_H * 3) / 256
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const player = k.add([
@@ -960,9 +972,7 @@ k.scene('game', () => {
 
             if (nextAnim !== ps.currentAnim) {
                 ps.currentAnim = nextAnim
-                const scale = nextSprite === 'jennifer-knockback'
-                    ? JENNIFER_SCALE_KNOCKBACK
-                    : JENNIFER_SCALE
+                const scale = JENNIFER_SCALE
                 player.use(k.sprite(nextSprite))
                 player.use(k.scale(scale))
                 player.play(nextAnim)
