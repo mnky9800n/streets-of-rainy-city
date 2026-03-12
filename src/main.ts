@@ -18,8 +18,8 @@ import { PLAYER_1, SYSTEM } from '@rcade/plugin-input-classic'
 const CANVAS_W = 336
 const CANVAS_H = 262
 
-const STREET_Y_TOP    = 140
-const STREET_Y_BOTTOM = 220
+const STREET_Y_TOP    = 165
+const STREET_Y_BOTTOM = 235
 
 const PLAYER_SPEED    = 80
 const PLAYER_W        = 18
