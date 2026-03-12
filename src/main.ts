@@ -97,24 +97,24 @@ function zFromY(y: number): number {
 k.loadSprite('startscreen', '/startscreen.png')
 
 k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
-    sliceX: 8,
+    sliceX: 6,
     sliceY: 1,
     anims: {
-        idle: { from: 0, to: 7, loop: true },
+        idle: { from: 0, to: 5, loop: true },
     },
 })
 
 k.loadSprite('jennifer-walk', '/sprites/jennifer/jennifer-walk.png', {
-    sliceX: 4,
-    sliceY: 2,
+    sliceX: 8,
+    sliceY: 1,
     anims: {
         walk: { from: 0, to: 7, loop: true },
     },
 })
 
 k.loadSprite('jennifer-punch', '/sprites/jennifer/jennifer-punch.png', {
-    sliceX: 6,
-    sliceY: 2,
+    sliceX: 12,
+    sliceY: 1,
     anims: {
         punch: { from: 0, to: 11, loop: false },
     },
@@ -145,16 +145,16 @@ k.loadSprite('jennifer-hit', '/sprites/jennifer/jennifer-hit.png', {
 })
 
 k.loadSprite('jennifer-knockback', '/sprites/jennifer/jennifer-knockback.png', {
-    sliceX: 3,
-    sliceY: 2,
+    sliceX: 6,
+    sliceY: 1,
     anims: {
         knockback: { from: 0, to: 5, loop: false },
     },
 })
 
 k.loadSprite('jennifer-death', '/sprites/jennifer/jennifer-death.png', {
-    sliceX: 4,
-    sliceY: 2,
+    sliceX: 8,
+    sliceY: 1,
     anims: {
         death: { from: 0, to: 7, loop: false },
     },
@@ -692,18 +692,15 @@ k.scene('game', () => {
         k.z(zFromY(ps.groundY) - 1),
     ]) as FadeRectObj
 
-    // Jennifer sprite frames are 192×1024 (1-row sheets) or 384×512 (2-row sheets).
-    // We want the rendered height to match PLAYER_H (30px).
-    // 1-row sheets: scale = 30 / 1024 ≈ 0.0293
-    // Using a single scale constant works because we swap the whole sprite component
-    // when the animation changes, so Kaplay re-measures the new frame dimensions.
-    const JENNIFER_SCALE_1ROW = PLAYER_H / 1024
-    const JENNIFER_SCALE_2ROW = PLAYER_H / 512
+    // Most sprite sheets are 1536px tall per frame, knockback is 1024px.
+    // Scale to match PLAYER_H (30px).
+    const JENNIFER_SCALE = PLAYER_H / 1536
+    const JENNIFER_SCALE_KNOCKBACK = PLAYER_H / 1024
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const player = k.add([
         k.sprite('jennifer-idle'),
-        k.scale(JENNIFER_SCALE_1ROW),
+        k.scale(JENNIFER_SCALE),
         k.pos(60, ps.groundY),
         k.anchor('bot'),
         k.z(zFromY(ps.groundY)),
@@ -956,12 +953,9 @@ k.scene('game', () => {
 
             if (nextAnim !== ps.currentAnim) {
                 ps.currentAnim = nextAnim
-                const scale = (nextSprite === 'jennifer-walk'      ||
-                               nextSprite === 'jennifer-punch'     ||
-                               nextSprite === 'jennifer-knockback' ||
-                               nextSprite === 'jennifer-death')
-                    ? JENNIFER_SCALE_2ROW
-                    : JENNIFER_SCALE_1ROW
+                const scale = nextSprite === 'jennifer-knockback'
+                    ? JENNIFER_SCALE_KNOCKBACK
+                    : JENNIFER_SCALE
                 player.use(k.sprite(nextSprite))
                 player.use(k.scale(scale))
                 player.play(nextAnim)
