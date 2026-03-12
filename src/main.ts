@@ -95,6 +95,7 @@ function zFromY(y: number): number {
 // ---------------------------------------------------------------------------
 
 k.loadSprite('startscreen', '/startscreen.png')
+k.loadSound('titlemusic', '/Bridge Street Run.mp3')
 
 k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
     sliceX: 6,
@@ -166,6 +167,12 @@ k.loadSprite('jennifer-death', '/sprites/jennifer/jennifer-death.png', {
 
 k.scene('title', () => {
     k.add([k.sprite('startscreen', { width: CANVAS_W, height: CANVAS_H }), k.pos(0, 0), k.fixed()])
+
+    const music = k.play('titlemusic')
+
+    k.onSceneLeave(() => {
+        music.stop()
+    })
 
     // k.add([
     //     k.text('STREETS OF\nRAINY CITY', { size: 28, align: 'center' }),
