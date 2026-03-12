@@ -98,18 +98,18 @@ k.loadSprite('startscreen', '/startscreen.png')
 k.loadSound('titlemusic', '/Bridge Street Run.mp3')
 
 k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
-    sliceX: 6,
+    sliceX: 1,
     sliceY: 1,
     anims: {
-        idle: { from: 0, to: 5, loop: true, speed: 4 },
+        idle: { from: 0, to: 0, loop: true },
     },
 })
 
 k.loadSprite('jennifer-walk', '/sprites/jennifer/jennifer-walk.png', {
-    sliceX: 8,
+    sliceX: 16,
     sliceY: 1,
     anims: {
-        walk: { from: 0, to: 7, loop: true, speed: 6 },
+        walk: { from: 0, to: 15, loop: true, speed: 10 },
     },
 })
 
