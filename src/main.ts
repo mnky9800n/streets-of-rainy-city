@@ -96,6 +96,11 @@ function zFromY(y: number): number {
     return y
 }
 
+function playPunchSound(gender: 'female' | 'male') {
+    const num = String(Math.floor(Math.random() * 16) + 1).padStart(2, '0')
+    k.play(`punch-${gender}-${num}`)
+}
+
 // ---------------------------------------------------------------------------
 // Asset loading
 // ---------------------------------------------------------------------------
@@ -103,26 +108,34 @@ function zFromY(y: number): number {
 k.loadSprite('startscreen', '/startscreen.png')
 k.loadSprite('bridgestreet-bg', '/bridgestreet/bridge-street-bg.png')
 k.loadSound('titlemusic', '/Bridge Street Run.mp3')
+k.loadSound('level1music', '/Bridge Street Run LEVEL 1.mp3')
+k.loadSound('gameoversound', '/8d82b5_Sonic_Game_Over_Sound_Effect.mp3')
+
+for (let i = 1; i <= 16; i++) {
+    const num = String(i).padStart(2, '0')
+    k.loadSound(`punch-female-${num}`, `/audiojungle-JlBqMz6C-boxing-punch-female-vocal-pack-2/boxing punch female vocal pack ${num}.wav`)
+    k.loadSound(`punch-male-${num}`, `/audiojungle-qwdFkYwS-boxing-punch-male-vocal-pack-2/boxing punch  male vocal pack ${num}.wav`)
+}
 
 k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
-    sliceX: 1,
+    sliceX: 6,
     sliceY: 1,
     anims: {
-        idle: { from: 0, to: 0, loop: true },
+        idle: { from: 0, to: 5, loop: true, speed: 6 },
     },
 })
 
 k.loadSprite('jennifer-walk', '/sprites/jennifer/jennifer-walk.png', {
-    sliceX: 16,
+    sliceX: 8,
     sliceY: 1,
     anims: {
-        walk: { from: 0, to: 15, loop: true, speed: 10 },
+        walk: { from: 0, to: 7, loop: true, speed: 10 },
     },
 })
 
 k.loadSprite('jennifer-punch', '/sprites/jennifer/jennifer-punch.png', {
-    sliceX: 6,
-    sliceY: 2,
+    sliceX: 12,
+    sliceY: 1,
     anims: {
         punch: { from: 0, to: 11, loop: false },
     },
@@ -168,16 +181,76 @@ k.loadSprite('jennifer-death', '/sprites/jennifer/jennifer-death.png', {
     },
 })
 
+// Enemy male sprites
+k.loadSprite('enemy-male-idle', '/sprites/enemy-thug-male/enemy-thug-male-idle.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { idle: { from: 0, to: 5, loop: true, speed: 6 } },
+})
+k.loadSprite('enemy-male-walk', '/sprites/enemy-thug-male/enemy-thug-male-walk.png', {
+    sliceX: 8, sliceY: 1,
+    anims: { walk: { from: 0, to: 7, loop: true, speed: 10 } },
+})
+k.loadSprite('enemy-male-punch', '/sprites/enemy-thug-male/enemy-thug-male-punch.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { punch: { from: 0, to: 5, loop: false } },
+})
+k.loadSprite('enemy-male-hit', '/sprites/enemy-thug-male/enemy-thug-male-hit.png', {
+    sliceX: 4, sliceY: 1,
+    anims: { hit: { from: 0, to: 3, loop: false } },
+})
+k.loadSprite('enemy-male-knockback', '/sprites/enemy-thug-male/enemy-thug-male-knockback.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { knockback: { from: 0, to: 5, loop: false } },
+})
+k.loadSprite('enemy-male-death', '/sprites/enemy-thug-male/enemy-thug-male-death.png', {
+    sliceX: 8, sliceY: 1,
+    anims: { death: { from: 0, to: 7, loop: false } },
+})
+
+// Enemy female sprites
+k.loadSprite('enemy-female-idle', '/sprites/enemy-thug-female/enemy-thug-female-idle.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { idle: { from: 0, to: 5, loop: true, speed: 6 } },
+})
+k.loadSprite('enemy-female-walk', '/sprites/enemy-thug-female/enemy-thug-female-walk.png', {
+    sliceX: 8, sliceY: 1,
+    anims: { walk: { from: 0, to: 7, loop: true, speed: 10 } },
+})
+k.loadSprite('enemy-female-punch', '/sprites/enemy-thug-female/enemy-thug-female-punch.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { punch: { from: 0, to: 5, loop: false } },
+})
+k.loadSprite('enemy-female-hit', '/sprites/enemy-thug-female/enemy-thug-female-hit.png', {
+    sliceX: 4, sliceY: 1,
+    anims: { hit: { from: 0, to: 3, loop: false } },
+})
+k.loadSprite('enemy-female-knockback', '/sprites/enemy-thug-female/enemy-thug-female-knockback.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { knockback: { from: 0, to: 5, loop: false } },
+})
+k.loadSprite('enemy-female-death', '/sprites/enemy-thug-female/enemy-thug-female-death.png', {
+    sliceX: 8, sliceY: 1,
+    anims: { death: { from: 0, to: 7, loop: false } },
+})
+
 // ---------------------------------------------------------------------------
 // Title music state (persists across title ↔ intro attract loop)
 // ---------------------------------------------------------------------------
 
 let titleMusic: ReturnType<typeof k.play> | null = null
+let level1Music: ReturnType<typeof k.play> | null = null
 
 function stopTitleMusic() {
     if (titleMusic) {
         titleMusic.stop()
         titleMusic = null
+    }
+}
+
+function stopLevel1Music() {
+    if (level1Music) {
+        level1Music.stop()
+        level1Music = null
     }
 }
 
@@ -307,6 +380,9 @@ k.scene('video', () => {
 // ---------------------------------------------------------------------------
 
 k.scene('levelstart', () => {
+    // Start level 1 music
+    level1Music = k.play('level1music')
+
     // Black background
     k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(0, 0, 0)), k.pos(0, 0), k.fixed()])
 
@@ -559,10 +635,13 @@ k.scene('game', () => {
         dying: boolean
         dyingTimer: number
         facingRight: boolean
+        currentAnim: string
+        variant: 'male' | 'female'
     }
 
     interface Enemy {
-        body:   FadeRectObj
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        body:   any
         shadow: FadeRectObj
         hpBg:   RectObj
         hpFg:   RectObj
@@ -573,6 +652,8 @@ k.scene('game', () => {
     let waveEnemies: Enemy[] = []
 
     function spawnEnemy(worldX: number, groundY: number): Enemy {
+        const variant: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female'
+
         const state: EnemyState = {
             hp: ENEMY_MAX_HP,
             maxHp: ENEMY_MAX_HP,
@@ -586,10 +667,12 @@ k.scene('game', () => {
             dying: false,
             dyingTimer: 0,
             facingRight: false,
+            currentAnim: 'idle',
+            variant,
         }
 
         const shadow = k.add([
-            k.rect(ENEMY_W + 4, 5),
+            k.rect(ENEMY_W * 3 + 4, 5),
             k.color(rgb(0, 0, 0)),
             k.opacity(0.35),
             k.pos(worldX, groundY),
@@ -597,19 +680,21 @@ k.scene('game', () => {
             k.z(zFromY(groundY) - 1),
         ]) as FadeRectObj
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const body = k.add([
-            k.rect(ENEMY_W, ENEMY_H),
-            k.color(rgb(...COL_ENEMY)),
+            k.sprite(`enemy-${variant}-idle`),
+            k.scale(ENEMY_SCALE),
             k.opacity(1),
             k.pos(worldX, groundY),
             k.anchor('bot'),
             k.z(zFromY(groundY)),
-        ]) as FadeRectObj
+        ]) as any
+        body.play('idle')
 
         const hpBg = k.add([
             k.rect(ENEMY_W + 4, 4),
             k.color(rgb(60, 20, 20)),
-            k.pos(worldX - 2, groundY - ENEMY_H - 4),
+            k.pos(worldX - 2, groundY - ENEMY_H * 3 - 4),
             k.anchor('botleft'),
             k.z(zFromY(groundY) + 1),
         ]) as RectObj
@@ -617,7 +702,7 @@ k.scene('game', () => {
         const hpFg = k.add([
             k.rect(ENEMY_W, 3),
             k.color(rgb(220, 50, 50)),
-            k.pos(worldX, groundY - ENEMY_H - 4),
+            k.pos(worldX, groundY - ENEMY_H * 3 - 4),
             k.anchor('botleft'),
             k.z(zFromY(groundY) + 2),
         ]) as RectObj
@@ -734,6 +819,8 @@ k.scene('game', () => {
 
     // All sprite frames are 256px tall. Scale to 3x PLAYER_H (90px in-game).
     const JENNIFER_SCALE = (PLAYER_H * 3) / 256
+    // Enemies scale to 3x ENEMY_H (84px in-game).
+    const ENEMY_SCALE = (ENEMY_H * 3) / 256
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const player = k.add([
@@ -823,6 +910,12 @@ k.scene('game', () => {
         if (es.hp <= 0) {
             es.dying = true
             es.dyingTimer = 0.4
+            // Switch to death sprite immediately so the animation plays during fade-out
+            const prefix = `enemy-${es.variant}`
+            enemy.body.use(k.sprite(`${prefix}-death`))
+            enemy.body.use(k.scale(ENEMY_SCALE))
+            enemy.body.play('death')
+            es.currentAnim = 'death'
         }
     }
 
@@ -976,6 +1069,7 @@ k.scene('game', () => {
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION * 1.5
                 ps.punchDir = ps.facingRight ? 1 : -1
+                playPunchSound('female')
                 performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18 * dmgMult, true)
             } else if (ps.grounded) {
                 ps.comboCount = (ps.comboCount % 3) + 1
@@ -983,6 +1077,7 @@ k.scene('game', () => {
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION
                 ps.punchDir = ps.facingRight ? 1 : -1
+                playPunchSound('female')
                 const isFinisher = ps.comboCount === 3
                 performPunchHit(PUNCH_REACH, ps.punchDir, (isFinisher ? 20 : 8) * dmgMult, isFinisher)
             }
@@ -1039,9 +1134,7 @@ k.scene('game', () => {
             } else if (!ps.grounded) {
                 nextAnim   = 'jump'
                 nextSprite = 'jennifer-jump'
-            } else if (k.isKeyDown('left') || k.isKeyDown('a') || k.isKeyDown('right') || k.isKeyDown('d') ||
-                       k.isKeyDown('up')   || k.isKeyDown('w') || k.isKeyDown('down')  || k.isKeyDown('s') ||
-                       PLAYER_1.DPAD.left || PLAYER_1.DPAD.right || PLAYER_1.DPAD.up || PLAYER_1.DPAD.down) {
+            } else if (left || right || up || down) {
                 nextAnim   = 'walk'
                 nextSprite = 'jennifer-walk'
             } else {
@@ -1097,7 +1190,7 @@ k.scene('game', () => {
                 es.hitFlashTimer -= dt
                 if (es.hitFlashTimer <= 0) {
                     es.hitFlash = false
-                    enemy.body.color = rgb(...COL_ENEMY)
+                    enemy.body.color = rgb(255, 255, 255)  // reset tint to white (normal)
                 }
             }
 
@@ -1121,14 +1214,56 @@ k.scene('game', () => {
             enemy.shadow.z = enemy.body.z - 1
 
             enemy.hpBg.pos.x = enemy.body.pos.x - 2
-            enemy.hpBg.pos.y = es.groundY - ENEMY_H - 4
+            enemy.hpBg.pos.y = es.groundY - ENEMY_H * 3 - 4
             enemy.hpFg.pos.x = enemy.body.pos.x
-            enemy.hpFg.pos.y = es.groundY - ENEMY_H - 4
+            enemy.hpFg.pos.y = es.groundY - ENEMY_H * 3 - 4
             enemy.hpFg.width = Math.max(0, Math.round(ENEMY_W * (es.hp / es.maxHp)))
+
+            // --- Enemy animation ---
+            // Note: dying enemies are handled by the early-exit block above (with continue),
+            // so this block only runs for living enemies. The death anim is triggered in
+            // applyDamageToEnemy at the moment es.dying becomes true.
+            {
+                let nextAnim: string
+                let nextSprite: string
+                const prefix = `enemy-${es.variant}`
+
+                if (es.knockback) {
+                    nextAnim   = 'knockback'
+                    nextSprite = `${prefix}-knockback`
+                } else if (es.hitFlash) {
+                    nextAnim   = 'hit'
+                    nextSprite = `${prefix}-hit`
+                } else if (es.punchCooldown > ENEMY_PUNCH_COOLDOWN - 0.3 && es.punchCooldown <= ENEMY_PUNCH_COOLDOWN) {
+                    nextAnim   = 'punch'
+                    nextSprite = `${prefix}-punch`
+                } else if (!es.knockback && inAggro) {
+                    nextAnim   = 'walk'
+                    nextSprite = `${prefix}-walk`
+                } else {
+                    nextAnim   = 'idle'
+                    nextSprite = `${prefix}-idle`
+                }
+
+                if (nextAnim !== es.currentAnim) {
+                    es.currentAnim = nextAnim
+                    enemy.body.use(k.sprite(nextSprite))
+                    enemy.body.use(k.scale(ENEMY_SCALE))
+                    enemy.body.play(nextAnim)
+                }
+
+                // Flip sprite to face correct direction
+                enemy.body.flipX = !es.facingRight
+            }
 
             es.punchCooldown -= dt
             if (es.punchCooldown <= 0 && inAggro && distX < ENEMY_PUNCH_REACH && distY < 20) {
                 es.punchCooldown = ENEMY_PUNCH_COOLDOWN
+                if (es.variant === 'female') {
+                    playPunchSound('female')
+                } else {
+                    playPunchSound('male')
+                }
                 if (!ps.knockback) {
                     hitPlayer(ENEMY_PUNCH_DAMAGE, enemy.body.pos.x < player.pos.x ? 1 : -1)
                 }
@@ -1171,6 +1306,9 @@ k.scene('game', () => {
 // ---------------------------------------------------------------------------
 
 k.scene('gameover', () => {
+    stopLevel1Music()
+    k.wait(0.5, () => k.play('gameoversound'))
+
     k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(10, 0, 0)), k.pos(0, 0), k.fixed()])
 
     k.add([
