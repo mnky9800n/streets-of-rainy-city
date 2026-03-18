@@ -1456,7 +1456,7 @@ k.scene('game', () => {
             let keyfobLanded = false
 
             const keyfob = k.add([
-                k.sprite('keyfob', { width: KEYFOB_SIZE, height: KEYFOB_SIZE }),
+                k.sprite('keyfob', { width: KEYFOB_SIZE, height: Math.round(KEYFOB_SIZE * 180 / 476) }),
                 k.pos(bossDeathX, bossDeathY - 40),
                 k.anchor('bot'),
                 k.z(zFromY(bossDeathY) + 0.5),
@@ -1500,8 +1500,8 @@ k.scene('game', () => {
 
             // Keyfob image
             const keyfobImg = k.add([
-                k.sprite('keyfob', { width: 60, height: 60 }),
-                k.pos(40, CANVAS_H / 2),
+                k.sprite('keyfob', { width: 100, height: 38 }),
+                k.pos(60, CANVAS_H / 2),
                 k.anchor('center'),
                 k.fixed(),
                 k.z(401),
