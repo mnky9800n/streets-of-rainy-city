@@ -24,15 +24,15 @@ const STREET_Y_BOTTOM = 252
 const PLAYER_SPEED    = 80
 const PLAYER_W        = 18
 const PLAYER_H        = 30
-const PLAYER_MAX_HP   = 100
+const PLAYER_MAX_HP   = 200
 const JUMP_VELOCITY   = -260
 const GRAVITY         = 600
 
 const PUNCH_REACH        = 36
 const PUNCH_DURATION     = 0.18
 const COMBO_WINDOW       = 0.45
-const KNOCKBACK_SPEED    = 150
-const KNOCKBACK_DURATION = 0.25
+const KNOCKBACK_SPEED    = 250
+const KNOCKBACK_DURATION = 0.35
 const HIT_FLASH_DURATION = 0.12
 
 const POWER_UP_DURATION    = 6.0   // seconds the power-up lasts
@@ -48,6 +48,14 @@ const ENEMY_PUNCH_REACH    = 28
 const ENEMY_PUNCH_COOLDOWN = 1.8
 const ENEMY_PUNCH_DAMAGE   = 10
 const ENEMY_AGGRO_RANGE    = 160
+
+const BOSS_MAX_HP          = 100
+const BOSS_SPEED           = 75
+const BOSS_PUNCH_REACH     = 40
+const BOSS_PUNCH_COOLDOWN  = 1.2
+const BOSS_PUNCH_DAMAGE    = 20
+const BOSS_AGGRO_RANGE     = 200
+const BOSS_SCALE           = (PLAYER_H * 4) / 256
 
 const DELIVERY_SPEED       = 200   // fast - zooms across screen
 const DELIVERY_DAMAGE      = 15
@@ -245,6 +253,27 @@ k.loadSprite('delivery-ride', '/sprites/delivery-enemy/delivery-enemy-ride.png',
 })
 
 k.loadSprite('pizza', '/pizza.png')
+
+// Boss - Evil Angel
+k.loadSprite('boss-walk', '/sprites/evil-angel/evil-angel-walk.png', {
+    sliceX: 16, sliceY: 1,
+    anims: { walk: { from: 0, to: 15, loop: true, speed: 8 } },
+})
+
+k.loadSprite('boss-flyattack', '/sprites/evil-angel/evil-angel-flyattack.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { flyattack: { from: 0, to: 5, loop: true, speed: 10 } },
+})
+
+k.loadSprite('boss-landing', '/sprites/evil-angel/evil-angel-landing.png', {
+    sliceX: 6, sliceY: 1,
+    anims: { landing: { from: 0, to: 5, loop: false, speed: 8 } },
+})
+
+k.loadSprite('boss-death', '/sprites/evil-angel/evil-angel-death.png', {
+    sliceX: 8, sliceY: 1,
+    anims: { death: { from: 0, to: 7, loop: false, speed: 6 } },
+})
 
 // ---------------------------------------------------------------------------
 // Title music state (persists across title ↔ intro attract loop)
@@ -625,11 +654,16 @@ k.scene('game', () => {
         { sectionIndex: 1, count: 3, spawnXRange: [400, 550] },
         { sectionIndex: 2, count: 3, spawnXRange: [700, 820] },
         { sectionIndex: 3, count: 4, spawnXRange: [1010, 1150] },
-        { sectionIndex: 4, count: 4, spawnXRange: [1310, 1450] },
     ]
 
     let currentWave = 0
     let goArrow: ReturnType<typeof k.add> | null = null
+    let bossDefeated = false
+    let bossIntroStarted = false
+    let bossArenaLocked = false
+    let bossArenaCamX = 0
+    let bossArenaLeft = 0
+    let bossArenaRight = 0
 
     // ------------------------------------------------------------------
     // Enemy type and factory
@@ -650,6 +684,10 @@ k.scene('game', () => {
         facingRight: boolean
         currentAnim: string
         variant: 'male' | 'female'
+        isBoss: boolean
+        flyAttackCooldown: number
+        flyAttackActive: boolean
+        flyAttackDir: number
     }
 
     interface Enemy {
@@ -682,6 +720,10 @@ k.scene('game', () => {
             facingRight: false,
             currentAnim: 'idle',
             variant,
+            isBoss: false,
+            flyAttackCooldown: 0,
+            flyAttackActive: false,
+            flyAttackDir: 0,
         }
 
         const shadow = k.add([
@@ -896,9 +938,10 @@ k.scene('game', () => {
     // Combat helpers
     // ------------------------------------------------------------------
 
-    function performPunchHit(reach: number, dir: number, damage: number, isFinisher: boolean) {
+    function performPunchHit(reach: number, dir: number, damage: number, isFinisher: boolean): boolean {
         const px = player.pos.x
         const py = ps.groundY
+        let hitAny = false
 
         for (const enemy of waveEnemies) {
             if (enemy.state.dying) continue
@@ -909,8 +952,10 @@ k.scene('game', () => {
                 : (ex < px && ex > px - reach)
             if (hit && Math.abs(ey - py) < 32) {
                 applyDamageToEnemy(enemy, damage, dir, isFinisher)
+                hitAny = true
             }
         }
+        return hitAny
     }
 
     function applyDamageToEnemy(enemy: Enemy, damage: number, dir: number, applyKnockback: boolean) {
@@ -928,16 +973,23 @@ k.scene('game', () => {
 
         if (es.hp <= 0) {
             es.dying = true
-            es.dyingTimer = 0.4
+            es.dyingTimer = es.isBoss ? 1.2 : 0.4
             // Drop dying enemies behind all living characters but above background
             enemy.body.z = 1
             enemy.shadow.z = 0.5
-            // Switch to death sprite immediately so the animation plays during fade-out
-            const prefix = `enemy-${es.variant}`
-            enemy.body.use(k.sprite(`${prefix}-death`))
-            enemy.body.use(k.scale(ENEMY_SCALE))
-            enemy.body.play('death')
-            es.currentAnim = 'death'
+            if (es.isBoss) {
+                enemy.body.use(k.sprite('boss-death'))
+                enemy.body.use(k.scale(BOSS_SCALE))
+                enemy.body.play('death')
+                es.currentAnim = 'death'
+            } else {
+                // Switch to death sprite immediately so the animation plays during fade-out
+                const prefix = `enemy-${es.variant}`
+                enemy.body.use(k.sprite(`${prefix}-death`))
+                enemy.body.use(k.scale(ENEMY_SCALE))
+                enemy.body.play('death')
+                es.currentAnim = 'death'
+            }
         }
     }
 
@@ -1091,17 +1143,19 @@ k.scene('game', () => {
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION * 1.5
                 ps.punchDir = ps.facingRight ? 1 : -1
-                playPunchSound('female')
-                performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18 * dmgMult, true)
+                if (performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18 * dmgMult, true)) {
+                    playPunchSound('female')
+                }
             } else if (ps.grounded) {
                 ps.comboCount = (ps.comboCount % 3) + 1
                 ps.comboTimer = COMBO_WINDOW
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION
                 ps.punchDir = ps.facingRight ? 1 : -1
-                playPunchSound('female')
                 const isFinisher = ps.comboCount === 3
-                performPunchHit(PUNCH_REACH, ps.punchDir, (isFinisher ? 20 : 8) * dmgMult, isFinisher)
+                if (performPunchHit(PUNCH_REACH, ps.punchDir, (isFinisher ? 20 : 8) * dmgMult, isFinisher)) {
+                    playPunchSound('female')
+                }
             }
         }
 
@@ -1177,8 +1231,14 @@ k.scene('game', () => {
         }
 
         // --- Camera ---
-        const camX = Math.max(CANVAS_W / 2, Math.min(totalWorldW - CANVAS_W / 2, player.pos.x))
-        k.camPos(k.vec2(camX, CANVAS_H / 2))
+        if (bossArenaLocked) {
+            // Lock player within boss arena and freeze camera
+            player.pos.x = Math.max(bossArenaLeft, Math.min(bossArenaRight, player.pos.x))
+            k.camPos(k.vec2(bossArenaCamX, CANVAS_H / 2))
+        } else {
+            const camX = Math.max(CANVAS_W / 2, Math.min(totalWorldW - CANVAS_W / 2, player.pos.x))
+            k.camPos(k.vec2(camX, CANVAS_H / 2))
+        }
 
         // --- HP bar ---
         const hpFrac = Math.max(0, ps.hp / PLAYER_MAX_HP)
@@ -1194,11 +1254,15 @@ k.scene('game', () => {
             const es = enemy.state
 
             if (es.dying) {
+                const dyingDuration = es.isBoss ? 1.2 : 0.4
                 es.dyingTimer -= dt
-                const fade = Math.max(0, es.dyingTimer / 0.4)
+                const fade = Math.max(0, es.dyingTimer / dyingDuration)
                 enemy.body.opacity = fade
                 enemy.shadow.opacity = fade * 0.35
-                if (es.dyingTimer <= 0) enemy.destroy()
+                if (es.dyingTimer <= 0) {
+                    enemy.destroy()
+                    if (es.isBoss) bossDefeated = true
+                }
                 continue
             }
 
@@ -1218,14 +1282,75 @@ k.scene('game', () => {
 
             const distX = Math.abs(enemy.body.pos.x - player.pos.x)
             const distY = Math.abs(es.groundY - ps.groundY)
-            const inAggro = distX < ENEMY_AGGRO_RANGE && distY < 60
+            const aggroRange   = es.isBoss ? BOSS_AGGRO_RANGE   : ENEMY_AGGRO_RANGE
+            const moveSpeed    = es.isBoss ? BOSS_SPEED          : ENEMY_SPEED
+            const punchReach   = es.isBoss ? BOSS_PUNCH_REACH    : ENEMY_PUNCH_REACH
+            const punchCooldownMax = es.isBoss ? BOSS_PUNCH_COOLDOWN : ENEMY_PUNCH_COOLDOWN
+            const punchDamage  = es.isBoss ? BOSS_PUNCH_DAMAGE   : ENEMY_PUNCH_DAMAGE
+            const inAggro = distX < aggroRange && distY < 60
 
-            if (!es.knockback && inAggro) {
+            if (es.isBoss) {
+                // --- Boss fly attack ---
+                if (!es.flyAttackActive) {
+                    es.flyAttackCooldown -= dt
+                }
+
+                if (es.flyAttackActive) {
+                    // Flying across the screen
+                    enemy.body.pos.x += es.flyAttackDir * 250 * dt
+                    es.groundY = STREET_Y_TOP + 20
+                    enemy.body.pos.y = es.groundY
+
+                    // Damage player on contact
+                    const fdx = Math.abs(enemy.body.pos.x - player.pos.x)
+                    const fdy = Math.abs(es.groundY - ps.groundY)
+                    if (fdx < 50 && fdy < 40 && !ps.knockback) {
+                        hitPlayer(BOSS_PUNCH_DAMAGE, es.flyAttackDir)
+                    }
+
+                    // Past screen edge — reappear on opposite side at ground level
+                    const pastRight = enemy.body.pos.x > bossArenaRight + 80
+                    const pastLeft  = enemy.body.pos.x < bossArenaLeft - 80
+                    if (pastRight || pastLeft) {
+                        es.flyAttackActive = false
+                        es.flyAttackCooldown = 6 + Math.random() * 4
+                        // Place at opposite edge
+                        enemy.body.pos.x = pastRight ? bossArenaLeft + 20 : bossArenaRight - 20
+                        es.groundY = (STREET_Y_TOP + STREET_Y_BOTTOM) / 2
+                        es.facingRight = player.pos.x > enemy.body.pos.x
+                        // Switch to walk
+                        enemy.body.use(k.sprite('boss-walk'))
+                        enemy.body.use(k.scale(BOSS_SCALE))
+                        enemy.body.play('walk')
+                        es.currentAnim = 'walk'
+                        enemy.body.flipX = es.facingRight
+                    }
+                } else if (es.flyAttackCooldown <= 0 && !es.flyAttackActive) {
+                    // Launch fly attack
+                    es.flyAttackActive = true
+                    es.flyAttackDir = player.pos.x < enemy.body.pos.x ? -1 : 1
+                    enemy.body.flipX = es.flyAttackDir < 0
+                    enemy.body.use(k.sprite('boss-flyattack'))
+                    enemy.body.use(k.scale(BOSS_SCALE))
+                    enemy.body.play('flyattack')
+                    es.currentAnim = 'flyattack'
+                } else {
+                    // Normal chase / punch AI (only when not in fly attack)
+                    if (!es.knockback && inAggro) {
+                        const dirX = player.pos.x > enemy.body.pos.x ? 1 : -1
+                        const dirY = ps.groundY > es.groundY ? 1 : -1
+                        es.facingRight = dirX > 0
+                        enemy.body.pos.x += dirX * moveSpeed * dt
+                        es.groundY += dirY * moveSpeed * 0.6 * dt
+                        es.groundY = Math.max(STREET_Y_TOP + 10, Math.min(STREET_Y_BOTTOM - 5, es.groundY))
+                    }
+                }
+            } else if (!es.knockback && inAggro) {
                 const dirX = player.pos.x > enemy.body.pos.x ? 1 : -1
                 const dirY = ps.groundY > es.groundY ? 1 : -1
                 es.facingRight = dirX > 0
-                enemy.body.pos.x += dirX * ENEMY_SPEED * dt
-                es.groundY += dirY * ENEMY_SPEED * 0.6 * dt
+                enemy.body.pos.x += dirX * moveSpeed * dt
+                es.groundY += dirY * moveSpeed * 0.6 * dt
                 es.groundY = Math.max(STREET_Y_TOP + 10, Math.min(STREET_Y_BOTTOM - 5, es.groundY))
             }
 
@@ -1235,20 +1360,42 @@ k.scene('game', () => {
             enemy.shadow.pos.y = es.groundY
             enemy.shadow.z = enemy.body.z - 1
 
-            enemy.hpBg.pos.x = enemy.body.pos.x - 2
-            enemy.hpBg.pos.y = es.groundY - ENEMY_H * 3 - 4
-            enemy.hpFg.pos.x = enemy.body.pos.x
-            enemy.hpFg.pos.y = es.groundY - ENEMY_H * 3 - 4
-            enemy.hpFg.width = Math.max(0, Math.round(ENEMY_W * (es.hp / es.maxHp)))
+            if (es.isBoss) {
+                // Boss HP bar is wider and floats above the scaled-up sprite
+                enemy.hpBg.pos.x = enemy.body.pos.x - 32
+                enemy.hpBg.pos.y = es.groundY - PLAYER_H * 4 - 6
+                enemy.hpFg.pos.x = enemy.body.pos.x - 30
+                enemy.hpFg.pos.y = es.groundY - PLAYER_H * 4 - 6
+                enemy.hpFg.width = Math.max(0, Math.round(60 * (es.hp / es.maxHp)))
+            } else {
+                enemy.hpBg.pos.x = enemy.body.pos.x - 2
+                enemy.hpBg.pos.y = es.groundY - ENEMY_H * 3 - 4
+                enemy.hpFg.pos.x = enemy.body.pos.x
+                enemy.hpFg.pos.y = es.groundY - ENEMY_H * 3 - 4
+                enemy.hpFg.width = Math.max(0, Math.round(ENEMY_W * (es.hp / es.maxHp)))
+            }
 
             // --- Enemy animation ---
             // Note: dying enemies are handled by the early-exit block above (with continue),
             // so this block only runs for living enemies. The death anim is triggered in
             // applyDamageToEnemy at the moment es.dying becomes true.
-            {
+            if (es.isBoss) {
+                // While fly-attacking, keep the flyattack sprite; otherwise stay on walk.
+                if (!es.flyAttackActive && es.currentAnim !== 'walk') {
+                    es.currentAnim = 'walk'
+                    enemy.body.use(k.sprite('boss-walk'))
+                    enemy.body.use(k.scale(BOSS_SCALE))
+                    enemy.body.play('walk')
+                }
+                // Boss walk sprite faces LEFT, so flipX is inverted vs regular enemies.
+                // During fly attack, flipX is set at launch time — don't override it here.
+                if (!es.flyAttackActive) {
+                    enemy.body.flipX = es.facingRight
+                }
+            } else {
+                const prefix = `enemy-${es.variant}`
                 let nextAnim: string
                 let nextSprite: string
-                const prefix = `enemy-${es.variant}`
 
                 if (es.knockback) {
                     nextAnim   = 'knockback'
@@ -1278,18 +1425,23 @@ k.scene('game', () => {
                 enemy.body.flipX = !es.facingRight
             }
 
-            es.punchCooldown -= dt
-            if (es.punchCooldown <= 0 && inAggro && distX < ENEMY_PUNCH_REACH && distY < 20) {
-                es.punchCooldown = ENEMY_PUNCH_COOLDOWN
-                if (es.variant === 'female') {
-                    playPunchSound('female')
-                } else {
-                    playPunchSound('male')
-                }
-                if (!ps.knockback) {
-                    hitPlayer(ENEMY_PUNCH_DAMAGE, enemy.body.pos.x < player.pos.x ? 1 : -1)
+            if (!es.flyAttackActive) {
+                es.punchCooldown -= dt
+                if (es.punchCooldown <= 0 && inAggro && distX < punchReach && distY < 20) {
+                    es.punchCooldown = punchCooldownMax
+                    if (!ps.knockback) {
+                        hitPlayer(punchDamage, enemy.body.pos.x < player.pos.x ? 1 : -1)
+                        playPunchSound(es.variant === 'female' ? 'female' : 'male')
+                    }
                 }
             }
+        }
+
+        // --- Boss victory ---
+        if (bossDefeated) {
+            bossDefeated = false
+            waveEnemies = []
+            k.go('victory')
         }
 
         // --- Wave completion ---
@@ -1310,12 +1462,245 @@ k.scene('game', () => {
                         sub.cancel()
                     }
                 })
-            } else {
-                ps.scrollLimitX = totalWorldW
-                showGoArrow()
+            } else if (!bossIntroStarted) {
+                // Final wave cleared — boss intro sequence
+                bossIntroStarted = true
                 currentWave = waves.length
                 waveEnemies = []
+                ps.scrollLimitX = totalWorldW
+
+                // "GO GO GO →" flashing text
+                const goText = k.add([
+                    k.text('GO GO GO  \u2192', { size: 20 }),
+                    k.pos(CANVAS_W / 2, CANVAS_H / 2),
+                    k.anchor('center'),
+                    k.color(rgb(255, 220, 50)),
+                    k.fixed(),
+                    k.z(103),
+                ])
+                let goFlash = 0
+                let goVisible = true
+                const goFlashSub = k.onUpdate(() => {
+                    goFlash += k.dt()
+                    if (goFlash > 0.3) {
+                        goFlash = 0
+                        goVisible = !goVisible
+                        goText.opacity = goVisible ? 1 : 0
+                    }
+                })
+
+                // Wait for player to walk one screen width right, then lock camera and start boss intro
+                const bossAreaX = player.pos.x + CANVAS_W
+                const triggerSub = k.onUpdate(() => {
+                    if (player.pos.x > bossAreaX) {
+                        goText.destroy()
+                        goFlashSub.cancel()
+                        triggerSub.cancel()
+                        // Lock scroll so player can't leave the boss arena
+                        ps.scrollLimitX = player.pos.x + CANVAS_W / 2
+                        startBossIntro()
+                    }
+                })
             }
+        }
+
+        function startBossIntro() {
+            const camCenter = k.camPos()
+            const bossLandX = camCenter.x
+            const bossLandY = (STREET_Y_TOP + STREET_Y_BOTTOM) / 2
+
+            // Boss flies down from top of screen
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const bossIntroSprite = k.add([
+                k.sprite('boss-walk'),
+                k.scale(BOSS_SCALE),
+                k.opacity(1),
+                k.pos(bossLandX, -100),
+                k.anchor('bot'),
+                k.z(300),
+                k.fixed(),
+            ]) as any
+            bossIntroSprite.play('walk')
+
+            let flyTimer = 0
+            const FLY_DURATION = 1.5
+
+            const flySub = k.onUpdate(() => {
+                flyTimer += k.dt()
+                const t = Math.min(1, flyTimer / FLY_DURATION)
+                // Ease-in landing (accelerate downward)
+                const ease = t * t
+                const screenLandY = CANVAS_H / 2 + 20
+                bossIntroSprite.pos.y = -100 + (screenLandY + 100) * ease
+
+                if (t >= 1) {
+                    flySub.cancel()
+                    showBossDialogue(bossLandX, bossLandY, bossIntroSprite)
+                }
+            })
+        }
+
+        function showBossDialogue(
+            bossLandX: number,
+            bossLandY: number,
+            bossIntroSprite: ReturnType<typeof k.add>,
+        ) {
+            // Dialogue box background
+            const dialogBg = k.add([
+                k.rect(CANVAS_W - 20, 100),
+                k.color(rgb(10, 0, 20)),
+                k.opacity(0.9),
+                k.pos(CANVAS_W / 2, CANVAS_H - 55),
+                k.anchor('center'),
+                k.fixed(),
+                k.z(400),
+            ])
+
+            // Boss face portrait (use first frame of walk sheet)
+            const portrait = k.add([
+                k.sprite('boss-walk'),
+                k.scale(0.3),
+                k.pos(20, CANVAS_H - 100),
+                k.anchor('botleft'),
+                k.fixed(),
+                k.z(401),
+            ]) as any
+
+            // Dialogue text
+            const dialogText = k.add([
+                k.text('"You will never stop\nTHE FINAL SACRIFICE!"', { size: 14, width: CANVAS_W - 120 }),
+                k.pos(110, CANVAS_H - 95),
+                k.color(rgb(255, 200, 255)),
+                k.fixed(),
+                k.z(401),
+            ])
+
+            // "PRESS START" prompt
+            const prompt = k.add([
+                k.text('PRESS START', { size: 10 }),
+                k.pos(CANVAS_W - 20, CANVAS_H - 12),
+                k.anchor('right'),
+                k.color(rgb(200, 200, 200)),
+                k.opacity(1),
+                k.fixed(),
+                k.z(401),
+            ])
+
+            let promptFlash = 0
+            let promptVisible = true
+            const promptSub = k.onUpdate(() => {
+                promptFlash += k.dt()
+                if (promptFlash > 0.4) {
+                    promptFlash = 0
+                    promptVisible = !promptVisible
+                    prompt.opacity = promptVisible ? 1 : 0
+                }
+            })
+
+            let dismissed = false
+            function dismissDialogue() {
+                if (dismissed) return
+                dismissed = true
+                dialogBg.destroy()
+                portrait.destroy()
+                dialogText.destroy()
+                prompt.destroy()
+                promptSub.cancel()
+                enterSub.cancel()
+                spaceSub.cancel()
+                zSub.cancel()
+                jSub.cancel()
+                bossIntroSprite.destroy()
+                spawnBoss(bossLandX, bossLandY)
+            }
+
+            const enterSub = k.onKeyPress('enter', dismissDialogue)
+            const spaceSub = k.onKeyPress('space', dismissDialogue)
+            const zSub = k.onKeyPress('z', dismissDialogue)
+            const jSub = k.onKeyPress('j', dismissDialogue)
+        }
+
+        function spawnBoss(bossX: number, bossY: number) {
+            // Lock the screen to the boss arena
+            const cam = k.camPos()
+            bossArenaLocked = true
+            bossArenaCamX = cam.x
+            bossArenaLeft = cam.x - CANVAS_W / 2 + 10
+            bossArenaRight = cam.x + CANVAS_W / 2 - 10
+
+            const bossState: EnemyState = {
+                hp: BOSS_MAX_HP,
+                maxHp: BOSS_MAX_HP,
+                groundY: bossY,
+                knockback: false,
+                knockbackTimer: 0,
+                knockbackDir: 1,
+                punchCooldown: 2,
+                hitFlash: false,
+                hitFlashTimer: 0,
+                dying: false,
+                dyingTimer: 0,
+                facingRight: false,
+                currentAnim: 'walk',
+                variant: 'male',
+                isBoss: true,
+                flyAttackCooldown: 8,
+                flyAttackActive: false,
+                flyAttackDir: -1,
+            }
+
+            const bossShadow = k.add([
+                k.rect(PLAYER_W * 4 + 4, 5),
+                k.color(rgb(0, 0, 0)),
+                k.opacity(0.35),
+                k.pos(bossX, bossY),
+                k.anchor('center'),
+                k.z(zFromY(bossY) - 1),
+            ]) as FadeRectObj
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const bossBody = k.add([
+                k.sprite('boss-walk'),
+                k.scale(BOSS_SCALE),
+                k.opacity(1),
+                k.pos(bossX, bossY),
+                k.anchor('bot'),
+                k.z(zFromY(bossY)),
+            ]) as any
+            bossBody.play('walk')
+
+            const bossHpBg = k.add([
+                k.rect(64, 6),
+                k.color(rgb(60, 20, 60)),
+                k.pos(bossX - 32, bossY - PLAYER_H * 4 - 6),
+                k.anchor('botleft'),
+                k.z(zFromY(bossY) + 1),
+            ]) as RectObj
+
+            const bossHpFg = k.add([
+                k.rect(60, 4),
+                k.color(rgb(200, 0, 200)),
+                k.pos(bossX - 30, bossY - PLAYER_H * 4 - 6),
+                k.anchor('botleft'),
+                k.z(zFromY(bossY) + 2),
+            ]) as RectObj
+
+            const bossEnemy: Enemy = {
+                body: bossBody,
+                shadow: bossShadow,
+                hpBg: bossHpBg,
+                hpFg: bossHpFg,
+                state: bossState,
+                destroy() {
+                    bossBody.destroy()
+                    bossShadow.destroy()
+                    bossHpBg.destroy()
+                    bossHpFg.destroy()
+                },
+            }
+
+            waveEnemies = [bossEnemy]
+            waveLabel.text = 'BOSS'
         }
 
         // --- Delivery enemy ---
@@ -1531,6 +1916,65 @@ k.scene('gameover', () => {
 
     k.onKeyPress('enter', () => { stopGameOverSound(); k.go('title') })
     k.onKeyPress('space', () => { stopGameOverSound(); k.go('title') })
+})
+
+// ---------------------------------------------------------------------------
+// Victory Scene
+// ---------------------------------------------------------------------------
+
+k.scene('victory', () => {
+    stopLevel1Music()
+
+    k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(10, 0, 20)), k.pos(0, 0), k.fixed()])
+
+    k.add([
+        k.text('YOU WIN!', { size: 40 }),
+        k.pos(CANVAS_W / 2, 70),
+        k.anchor('center'),
+        k.color(rgb(200, 0, 255)),
+        k.fixed(),
+    ])
+
+    k.add([
+        k.text('The pizza is safe.', { size: 14 }),
+        k.pos(CANVAS_W / 2, 130),
+        k.anchor('center'),
+        k.color(rgb(220, 200, 255)),
+        k.fixed(),
+    ])
+
+    k.add([
+        k.text('Your girlfriend is free!', { size: 14 }),
+        k.pos(CANVAS_W / 2, 152),
+        k.anchor('center'),
+        k.color(rgb(220, 200, 255)),
+        k.fixed(),
+    ])
+
+    const cont = k.add([
+        k.text('PRESS START', { size: 10 }),
+        k.pos(CANVAS_W / 2, 200),
+        k.anchor('center'),
+        k.color(rgb(255, 255, 255)),
+        k.opacity(1),
+        k.fixed(),
+    ])
+
+    let flashTimer = 0
+    let visible = true
+
+    k.onUpdate(() => {
+        flashTimer += k.dt()
+        if (flashTimer > 0.5) {
+            flashTimer = 0
+            visible = !visible
+            cont.opacity = visible ? 1 : 0
+        }
+        if (SYSTEM.ONE_PLAYER) k.go('title')
+    })
+
+    k.onKeyPress('enter', () => k.go('title'))
+    k.onKeyPress('space', () => k.go('title'))
 })
 
 // ---------------------------------------------------------------------------
