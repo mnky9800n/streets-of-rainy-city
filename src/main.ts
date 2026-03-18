@@ -861,19 +861,20 @@ k.scene('game', () => {
         k.z(zFromY(ps.groundY) - 1),
     ]) as FadeRectObj
 
-    // Pulsing blue aura drawn just behind the player; visible only during power-up.
-    const AURA_W = PLAYER_W + 14
-    const AURA_H = PLAYER_H + 14
-    const playerAura = k.add([
-        k.rect(AURA_W, AURA_H),
-        k.color(rgb(...COL_POWER_UP_AURA)),
-        k.opacity(0),
-        k.pos(60, ps.groundY),
-        k.anchor('bot'),
-        k.z(zFromY(ps.groundY) - 0.5),
-    ]) as FadeRectObj
-
-    let auraTime = 0   // drives the sine pulse
+    // Blue flame effect during power-up — 3 pre-created rects that oscillate
+    const flames: any[] = []
+    for (let i = 0; i < 3; i++) {
+        const flame = k.add([
+            k.rect(6, 12 + i * 6),
+            k.color(rgb(60 + i * 30, 140 + i * 20, 255)),
+            k.opacity(0),
+            k.pos(0, 0),
+            k.anchor('bot'),
+            k.z(0),
+        ]) as any
+        flames.push(flame)
+    }
+    let flameTime = 0
 
     // All sprite frames are 256px tall. Scale to 3x PLAYER_H (90px in-game).
     const JENNIFER_SCALE = (PLAYER_H * 3) / 256
@@ -1061,24 +1062,26 @@ k.scene('game', () => {
             if (ps.powerUpTimer <= 0) {
                 ps.powerUp        = false
                 ps.powerUpCooldown = POWER_UP_COOLDOWN
-                player.color      = rgb(255, 255, 255)
-            } else {
-                player.color = rgb(...COL_POWER_UP_AURA)
             }
         } else if (ps.powerUpCooldown > 0) {
             ps.powerUpCooldown -= dt
         }
 
-        // --- Aura visual ---
+        // --- Blue flame effect ---
         if (ps.powerUp) {
-            auraTime += dt
-            const pulse = 0.25 + 0.25 * Math.sin(auraTime * 8)
-            playerAura.opacity  = pulse
-            playerAura.pos.x    = player.pos.x
-            playerAura.pos.y    = ps.visualY
-            playerAura.z        = player.z - 0.5
+            flameTime += dt
+            for (let i = 0; i < flames.length; i++) {
+                const f = flames[i]
+                const speed = 5 + i * 2
+                const xOff = Math.sin(flameTime * speed + i * 2) * (8 + i * 4)
+                const yOff = Math.sin(flameTime * (speed + 1) + i) * 6
+                f.pos.x = player.pos.x + xOff
+                f.pos.y = ps.visualY - PLAYER_H * (0.5 + i * 0.4) + yOff
+                f.opacity = 0.3 + 0.2 * Math.sin(flameTime * speed * 1.5 + i)
+                f.z = player.z - 0.5
+            }
         } else {
-            playerAura.opacity = 0
+            for (const f of flames) f.opacity = 0
         }
 
         // --- Power-up HUD labels ---
