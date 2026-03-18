@@ -35,11 +35,6 @@ const KNOCKBACK_SPEED    = 250
 const KNOCKBACK_DURATION = 0.35
 const HIT_FLASH_DURATION = 0.12
 
-const POWER_UP_DURATION    = 6.0   // seconds the power-up lasts
-const POWER_UP_COOLDOWN    = 18.0  // seconds before it can be used again
-const POWER_UP_WINDOW      = 0.1   // seconds within which both buttons must be pressed
-const POWER_UP_DAMAGE_MULT = 2     // damage multiplier while powered up
-
 const ENEMY_W              = 18
 const ENEMY_H              = 28
 const ENEMY_SPEED          = 42
@@ -67,7 +62,6 @@ const NUM_SECTIONS    = 5
 
 const COL_PLAYER:        [number, number, number] = [52,  152, 219]
 const COL_ENEMY:         [number, number, number] = [231, 76,  60]
-const COL_POWER_UP_AURA: [number, number, number] = [80,  160, 255]
 const COL_STREET:    [number, number, number] = [80,  80,  80]
 const COL_BUILDING:  [number, number, number] = [45,  45,  45]
 const COL_SKY:       [number, number, number] = [20,  20,  40]
@@ -618,28 +612,6 @@ k.scene('game', () => {
         k.z(102),
     ])
 
-    // Power-up HUD: "POWER UP!" flashes in the top-centre while active.
-    const powerUpLabel = k.add([
-        k.text('POWER UP!', { size: 9 }),
-        k.pos(CANVAS_W / 2, 10),
-        k.anchor('top'),
-        k.color(rgb(...COL_POWER_UP_AURA)),
-        k.opacity(0),
-        k.fixed(),
-        k.z(102),
-    ])
-
-    // "READY" indicator shown when power-up is off cooldown but not yet active.
-    const powerReadyLabel = k.add([
-        k.text('PWR RDY', { size: 7 }),
-        k.pos(CANVAS_W / 2, 10),
-        k.anchor('top'),
-        k.color(rgb(160, 200, 255)),
-        k.opacity(1),
-        k.fixed(),
-        k.z(102),
-    ])
-
     // ------------------------------------------------------------------
     // Wave definitions
     // ------------------------------------------------------------------
@@ -805,12 +777,6 @@ k.scene('game', () => {
         hitFlash: boolean
         hitFlashTimer: number
 
-        powerUp: boolean
-        powerUpTimer: number
-        powerUpCooldown: number
-        lastAPressTime: number
-        lastBPressTime: number
-
         scrollLimitX: number
 
         currentAnim: string
@@ -841,12 +807,6 @@ k.scene('game', () => {
         hitFlash: false,
         hitFlashTimer: 0,
 
-        powerUp: false,
-        powerUpTimer: 0,
-        powerUpCooldown: 0,
-        lastAPressTime: -999,
-        lastBPressTime: -999,
-
         scrollLimitX: WORLD_SECTION_W - PLAYER_W,
 
         currentAnim: 'idle',
@@ -860,21 +820,6 @@ k.scene('game', () => {
         k.anchor('center'),
         k.z(zFromY(ps.groundY) - 1),
     ]) as FadeRectObj
-
-    // Blue flame effect during power-up — 3 pre-created rects that oscillate
-    const flames: any[] = []
-    for (let i = 0; i < 3; i++) {
-        const flame = k.add([
-            k.rect(6, 12 + i * 6),
-            k.color(rgb(60 + i * 30, 140 + i * 20, 255)),
-            k.opacity(0),
-            k.pos(0, 0),
-            k.anchor('bot'),
-            k.z(0),
-        ]) as any
-        flames.push(flame)
-    }
-    let flameTime = 0
 
     // All sprite frames are 256px tall. Scale to 3x PLAYER_H (90px in-game).
     const JENNIFER_SCALE = (PLAYER_H * 3) / 256
@@ -1030,69 +975,8 @@ k.scene('game', () => {
         const down  = PLAYER_1.DPAD.down  || k.isKeyDown('down')  || k.isKeyDown('s')
         const left  = PLAYER_1.DPAD.left  || k.isKeyDown('left')  || k.isKeyDown('a')
         const right = PLAYER_1.DPAD.right || k.isKeyDown('right') || k.isKeyDown('d')
-        let fireA = pressedA || k.isKeyPressed('z') || k.isKeyPressed('j')
-        let fireB = pressedB || k.isKeyPressed('x') || k.isKeyPressed('k')
-
-        // --- Power-up activation detection ---
-        // Record the moment each button was last pressed so we can check
-        // whether both were pressed within POWER_UP_WINDOW seconds of each other.
-        const now = k.time()
-        if (fireA) ps.lastAPressTime = now
-        if (fireB) ps.lastBPressTime = now
-
-        const simultaneousPress =
-            (fireA && Math.abs(now - ps.lastBPressTime) <= POWER_UP_WINDOW) ||
-            (fireB && Math.abs(now - ps.lastAPressTime) <= POWER_UP_WINDOW)
-
-        if (simultaneousPress && !ps.powerUp && ps.powerUpCooldown <= 0) {
-            ps.powerUp      = true
-            ps.powerUpTimer = POWER_UP_DURATION
-            // Consume both button presses so the frame's individual actions
-            // (jump, punch) do not fire alongside the power-up activation.
-            fireA = false
-            fireB = false
-            // Invalidate recorded press times to prevent immediate re-trigger.
-            ps.lastAPressTime = -999
-            ps.lastBPressTime = -999
-        }
-
-        // --- Power-up timer and cooldown ---
-        if (ps.powerUp) {
-            ps.powerUpTimer -= dt
-            if (ps.powerUpTimer <= 0) {
-                ps.powerUp        = false
-                ps.powerUpCooldown = POWER_UP_COOLDOWN
-            }
-        } else if (ps.powerUpCooldown > 0) {
-            ps.powerUpCooldown -= dt
-        }
-
-        // --- Blue flame effect ---
-        if (ps.powerUp) {
-            flameTime += dt
-            for (let i = 0; i < flames.length; i++) {
-                const f = flames[i]
-                const speed = 5 + i * 2
-                const xOff = Math.sin(flameTime * speed + i * 2) * (8 + i * 4)
-                const yOff = Math.sin(flameTime * (speed + 1) + i) * 6
-                f.pos.x = player.pos.x + xOff
-                f.pos.y = ps.visualY - PLAYER_H * (0.5 + i * 0.4) + yOff
-                f.opacity = 0.3 + 0.2 * Math.sin(flameTime * speed * 1.5 + i)
-                f.z = player.z - 0.5
-            }
-        } else {
-            for (const f of flames) f.opacity = 0
-        }
-
-        // --- Power-up HUD labels ---
-        if (ps.powerUp) {
-            const hudPulse = 0.6 + 0.4 * Math.sin(auraTime * 6)
-            powerUpLabel.opacity    = hudPulse
-            powerReadyLabel.opacity = 0
-        } else {
-            powerUpLabel.opacity    = 0
-            powerReadyLabel.opacity = ps.powerUpCooldown <= 0 ? 1 : 0
-        }
+        const fireA = pressedA || k.isKeyPressed('z') || k.isKeyPressed('j')
+        const fireB = pressedB || k.isKeyPressed('x') || k.isKeyPressed('k')
 
         // --- Player knockback ---
         if (ps.knockback) {
@@ -1142,14 +1026,13 @@ k.scene('game', () => {
         }
 
         // --- Initiate attack ---
-        const dmgMult = ps.powerUp ? POWER_UP_DAMAGE_MULT : 1
         if (fireA && !ps.punchActive && !ps.knockback) {
             if (!ps.grounded && !ps.jumpKickUsed) {
                 ps.jumpKickUsed = true
                 ps.punchActive = true
                 ps.punchTimer = PUNCH_DURATION * 1.5
                 ps.punchDir = ps.facingRight ? 1 : -1
-                if (performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18 * dmgMult, true)) {
+                if (performPunchHit(PUNCH_REACH * 1.3, ps.punchDir, 18, true)) {
                     playPunchSound('female')
                 }
             } else if (ps.grounded) {
@@ -1159,7 +1042,7 @@ k.scene('game', () => {
                 ps.punchTimer = PUNCH_DURATION
                 ps.punchDir = ps.facingRight ? 1 : -1
                 const isFinisher = ps.comboCount === 3
-                if (performPunchHit(PUNCH_REACH, ps.punchDir, (isFinisher ? 20 : 8) * dmgMult, isFinisher)) {
+                if (performPunchHit(PUNCH_REACH, ps.punchDir, isFinisher ? 20 : 8, isFinisher)) {
                     playPunchSound('female')
                 }
             }
