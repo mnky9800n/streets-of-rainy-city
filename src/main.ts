@@ -1297,7 +1297,58 @@ k.scene('game', () => {
         }
 
         // --- Game over ---
-        if (ps.hp <= 0) k.go('gameover')
+        if (ps.hp <= 0) k.go('deathvideo')
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Game Over Scene
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Death Video Scene (plays death.mp4 before game over screen)
+// ---------------------------------------------------------------------------
+
+k.scene('deathvideo', () => {
+    stopLevel1Music()
+
+    k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(0, 0, 0)), k.pos(0, 0), k.fixed()])
+
+    const canvas = document.querySelector('canvas')!
+    const video = document.createElement('video')
+    video.src = '/death.mp4'
+    video.playsInline = true
+    video.style.position = 'absolute'
+    video.style.top = canvas.offsetTop + 'px'
+    video.style.left = canvas.offsetLeft + 'px'
+    video.style.width = canvas.clientWidth + 'px'
+    video.style.height = canvas.clientHeight + 'px'
+    video.style.objectFit = 'cover'
+    video.style.zIndex = '9999'
+    canvas.parentElement!.appendChild(video)
+
+    video.play()
+
+    video.addEventListener('ended', () => {
+        video.remove()
+        k.go('gameover')
+    })
+
+    function skip() {
+        video.pause()
+        video.remove()
+        k.go('gameover')
+    }
+
+    k.onKeyPress('enter', skip)
+    k.onKeyPress('space', skip)
+
+    k.onUpdate(() => {
+        if (SYSTEM.ONE_PLAYER) skip()
+    })
+
+    k.onSceneLeave(() => {
+        video.remove()
     })
 })
 
