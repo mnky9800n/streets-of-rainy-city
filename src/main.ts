@@ -19,7 +19,7 @@ const CANVAS_W = 336
 const CANVAS_H = 262
 
 const STREET_Y_TOP    = 165
-const STREET_Y_BOTTOM = 235
+const STREET_Y_BOTTOM = 252
 
 const PLAYER_SPEED    = 80
 const PLAYER_W        = 18
@@ -48,6 +48,11 @@ const ENEMY_PUNCH_REACH    = 28
 const ENEMY_PUNCH_COOLDOWN = 1.8
 const ENEMY_PUNCH_DAMAGE   = 10
 const ENEMY_AGGRO_RANGE    = 160
+
+const DELIVERY_SPEED       = 200   // fast - zooms across screen
+const DELIVERY_DAMAGE      = 15
+const DELIVERY_INTERVAL    = 10.8  // seconds between delivery enemies
+const DELIVERY_SCALE       = (ENEMY_H * 3) / 256
 
 const WORLD_SECTION_W = 336
 const NUM_SECTIONS    = 5
@@ -232,6 +237,14 @@ k.loadSprite('enemy-female-death', '/sprites/enemy-thug-female/enemy-thug-female
     sliceX: 8, sliceY: 1,
     anims: { death: { from: 0, to: 7, loop: false } },
 })
+
+// Delivery enemy (skellyboy bike rider)
+k.loadSprite('delivery-ride', '/sprites/delivery-enemy/delivery-enemy-ride.png', {
+    sliceX: 4, sliceY: 1,
+    anims: { ride: { from: 0, to: 3, loop: true, speed: 8 } },
+})
+
+k.loadSprite('pizza', '/pizza.png')
 
 // ---------------------------------------------------------------------------
 // Title music state (persists across title ↔ intro attract loop)
@@ -874,6 +887,12 @@ k.scene('game', () => {
     spawnWave(0)
 
     // ------------------------------------------------------------------
+    // Delivery enemy (bike hazard that rides across screen)
+    // ------------------------------------------------------------------
+
+    let deliveryTimer = 8 + Math.random() * 4  // first one after 8-12 seconds
+
+    // ------------------------------------------------------------------
     // Combat helpers
     // ------------------------------------------------------------------
 
@@ -1297,6 +1316,94 @@ k.scene('game', () => {
                 currentWave = waves.length
                 waveEnemies = []
             }
+        }
+
+        // --- Delivery enemy ---
+        deliveryTimer -= dt
+        if (deliveryTimer <= 0) {
+            deliveryTimer = DELIVERY_INTERVAL + Math.random() * 5
+
+            // Pick a random Y on the street
+            const deliveryY = STREET_Y_TOP + 15 + Math.random() * (STREET_Y_BOTTOM - STREET_Y_TOP - 20)
+
+            // Spawn from the right side of the visible screen, ride left
+            // The sprite faces LEFT already so no flip needed
+            const startX = k.camPos().x + CANVAS_W / 2 + 50
+
+            const biker = k.add([
+                k.sprite('delivery-ride'),
+                k.scale(DELIVERY_SCALE),
+                k.pos(startX, deliveryY),
+                k.anchor('bot'),
+                k.z(zFromY(deliveryY)),
+                k.opacity(1),
+            ]) as any
+            biker.play('ride')
+
+            // Drop a pizza at a random point along the ride
+            let pizzaDropped = false
+            // Drop pizza somewhere in the visible screen area
+            const camLeft = k.camPos().x - CANVAS_W / 2
+            const pizzaDropX = camLeft + CANVAS_W * 0.2 + Math.random() * CANVAS_W * 0.6
+
+            const bikerUpdate = k.onUpdate(() => {
+                biker.pos.x -= DELIVERY_SPEED * k.dt()
+
+                // Drop pizza as biker passes the drop point — arcs off the back
+                if (!pizzaDropped && biker.pos.x <= pizzaDropX) {
+                    pizzaDropped = true
+                    const PIZZA_SIZE = 48
+                    const landY = deliveryY
+                    let pizzaVelX = 60     // drifts right (off the back)
+                    let pizzaVelY = -180   // launches upward
+                    const pizzaGravity = 500
+                    let pizzaLanded = false
+
+                    const pizzaBox = k.add([
+                        k.sprite('pizza', { width: PIZZA_SIZE, height: PIZZA_SIZE }),
+                        k.pos(biker.pos.x, deliveryY - 30),
+                        k.anchor('bot'),
+                        k.z(zFromY(deliveryY) + 0.5),
+                    ]) as any
+
+                    const pizzaUpdate = k.onUpdate(() => {
+                        const pdt = k.dt()
+
+                        // Arc physics until landed
+                        if (!pizzaLanded) {
+                            pizzaVelY += pizzaGravity * pdt
+                            pizzaBox.pos.x += pizzaVelX * pdt
+                            pizzaBox.pos.y += pizzaVelY * pdt
+                            if (pizzaBox.pos.y >= landY) {
+                                pizzaBox.pos.y = landY
+                                pizzaLanded = true
+                            }
+                        }
+
+                        // Pickup collision
+                        const pdx = Math.abs(pizzaBox.pos.x - player.pos.x)
+                        const pdy = Math.abs(landY - ps.groundY)
+                        if (pdx < 24 && pdy < 24) {
+                            ps.hp = Math.min(PLAYER_MAX_HP, ps.hp + PLAYER_MAX_HP * 0.2)
+                            pizzaBox.destroy()
+                            pizzaUpdate.cancel()
+                        }
+                    })
+                }
+
+                // Check collision with player
+                const dx = Math.abs(biker.pos.x - player.pos.x)
+                const dy = Math.abs(deliveryY - ps.groundY)
+                if (dx < 30 && dy < 20 && !ps.knockback) {
+                    hitPlayer(DELIVERY_DAMAGE, biker.pos.x < player.pos.x ? 1 : -1)
+                }
+
+                // Remove when off screen to the left
+                if (biker.pos.x < k.camPos().x - CANVAS_W / 2 - 100) {
+                    biker.destroy()
+                    bikerUpdate.cancel()
+                }
+            })
         }
 
         // --- Game over ---
