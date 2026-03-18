@@ -1256,9 +1256,7 @@ k.scene('game', () => {
             if (es.dying) {
                 const dyingDuration = es.isBoss ? 1.2 : 0.4
                 es.dyingTimer -= dt
-                const fade = Math.max(0, es.dyingTimer / dyingDuration)
-                enemy.body.opacity = fade
-                enemy.shadow.opacity = fade * 0.35
+                enemy.shadow.opacity = 0
                 if (es.dyingTimer <= 0) {
                     enemy.destroy()
                     if (es.isBoss) bossDefeated = true
@@ -1387,10 +1385,10 @@ k.scene('game', () => {
                     enemy.body.use(k.scale(BOSS_SCALE))
                     enemy.body.play('walk')
                 }
-                // Boss walk sprite faces LEFT, so flipX is inverted vs regular enemies.
+                // Boss walk sprite faces RIGHT (same as regular enemies).
                 // During fly attack, flipX is set at launch time — don't override it here.
                 if (!es.flyAttackActive) {
-                    enemy.body.flipX = es.facingRight
+                    enemy.body.flipX = !es.facingRight
                 }
             } else {
                 const prefix = `enemy-${es.variant}`
@@ -1505,17 +1503,17 @@ k.scene('game', () => {
         }
 
         function startBossIntro() {
-            const camCenter = k.camPos()
-            const bossLandX = camCenter.x
+            const bossLandX = CANVAS_W / 2
             const bossLandY = (STREET_Y_TOP + STREET_Y_BOTTOM) / 2
+            const screenLandY = CANVAS_H / 2 + 20
 
-            // Boss flies down from top of screen
+            // Boss flies down from top of screen (fixed/screen space)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const bossIntroSprite = k.add([
                 k.sprite('boss-walk'),
                 k.scale(BOSS_SCALE),
                 k.opacity(1),
-                k.pos(bossLandX, -100),
+                k.pos(bossLandX, -150),
                 k.anchor('bot'),
                 k.z(300),
                 k.fixed(),
@@ -1530,12 +1528,13 @@ k.scene('game', () => {
                 const t = Math.min(1, flyTimer / FLY_DURATION)
                 // Ease-in landing (accelerate downward)
                 const ease = t * t
-                const screenLandY = CANVAS_H / 2 + 20
-                bossIntroSprite.pos.y = -100 + (screenLandY + 100) * ease
+                bossIntroSprite.pos.y = -150 + (screenLandY + 150) * ease
 
                 if (t >= 1) {
                     flySub.cancel()
-                    showBossDialogue(bossLandX, bossLandY, bossIntroSprite)
+                    // Convert screen X to world X for boss spawn
+                    const worldBossX = k.camPos().x
+                    showBossDialogue(worldBossX, bossLandY, bossIntroSprite)
                 }
             })
         }
