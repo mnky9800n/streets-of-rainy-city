@@ -37,3 +37,7 @@ public/bridgestreet/Screenshot*
 public/bridgestreet/sections/
 public/bridgestreet/bridge-street-bg-blended.png
 public/bridgestreet/rc-logo.png
+# Source video files (used for frame extraction only, not at runtime)
+public/evilangel.mp4
+public/flyattack-evilangel.mp4
+public/death-evilangel.mp4
