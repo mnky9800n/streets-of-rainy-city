@@ -1551,6 +1551,7 @@ k.scene('game', () => {
                 spaceK.cancel()
                 zK.cancel()
                 jK.cancel()
+                rcadeSub.cancel()
                 fadeToEndVideo()
             }
 
@@ -1558,6 +1559,9 @@ k.scene('game', () => {
             const spaceK = k.onKeyPress('space', dismiss)
             const zK = k.onKeyPress('z', dismiss)
             const jK = k.onKeyPress('j', dismiss)
+            const rcadeSub = k.onUpdate(() => {
+                if (SYSTEM.ONE_PLAYER || PLAYER_1.A || PLAYER_1.B) dismiss()
+            })
         }
 
         function fadeToEndVideo() {
@@ -1715,6 +1719,7 @@ k.scene('game', () => {
                 spaceSub.cancel()
                 zSub.cancel()
                 jSub.cancel()
+                rcadeDismissSub.cancel()
                 spawnBoss(bossLandX, bossLandY)
             }
 
@@ -1722,6 +1727,9 @@ k.scene('game', () => {
             const spaceSub = k.onKeyPress('space', dismissDialogue)
             const zSub = k.onKeyPress('z', dismissDialogue)
             const jSub = k.onKeyPress('j', dismissDialogue)
+            const rcadeDismissSub = k.onUpdate(() => {
+                if (SYSTEM.ONE_PLAYER || PLAYER_1.A || PLAYER_1.B) dismissDialogue()
+            })
         }
 
         function spawnBoss(bossX: number, bossY: number) {
