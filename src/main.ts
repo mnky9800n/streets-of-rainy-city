@@ -1510,7 +1510,7 @@ k.scene('game', () => {
             // Text
             const pickupText = k.add([
                 k.text("You got Walter's\nRC key!", { size: 16 }),
-                k.pos(80, CANVAS_H / 2 - 20),
+                k.pos(130, CANVAS_H / 2 - 20),
                 k.color(rgb(255, 255, 100)),
                 k.fixed(),
                 k.z(401),
