@@ -121,7 +121,7 @@ k.loadSprite('jennifer-idle', '/sprites/jennifer/jennifer-idle.png', {
     sliceX: 6,
     sliceY: 1,
     anims: {
-        idle: { from: 0, to: 5, loop: true, speed: 6 },
+        idle: { from: 0, to: 4, loop: true, speed: 6 },
     },
 })
 
@@ -910,6 +910,9 @@ k.scene('game', () => {
         if (es.hp <= 0) {
             es.dying = true
             es.dyingTimer = 0.4
+            // Drop dying enemies behind all living characters but above background
+            enemy.body.z = 1
+            enemy.shadow.z = 0.5
             // Switch to death sprite immediately so the animation plays during fade-out
             const prefix = `enemy-${es.variant}`
             enemy.body.use(k.sprite(`${prefix}-death`))
@@ -1325,9 +1328,12 @@ k.scene('deathvideo', () => {
     video.style.height = canvas.clientHeight + 'px'
     video.style.objectFit = 'cover'
     video.style.zIndex = '9999'
+    video.style.opacity = '0'
+    video.style.transition = 'opacity 1s ease-in'
     canvas.parentElement!.appendChild(video)
 
     video.play()
+    requestAnimationFrame(() => { video.style.opacity = '1' })
 
     video.addEventListener('ended', () => {
         video.remove()
@@ -1358,7 +1364,15 @@ k.scene('deathvideo', () => {
 
 k.scene('gameover', () => {
     stopLevel1Music()
-    k.wait(0.5, () => k.play('gameoversound'))
+    let gameOverSound: ReturnType<typeof k.play> | null = null
+    k.wait(0.5, () => { gameOverSound = k.play('gameoversound') })
+
+    function stopGameOverSound() {
+        if (gameOverSound) {
+            gameOverSound.stop()
+            gameOverSound = null
+        }
+    }
 
     k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(10, 0, 0)), k.pos(0, 0), k.fixed()])
 
@@ -1405,11 +1419,11 @@ k.scene('gameover', () => {
             visible = !visible
             retry.opacity = visible ? 1 : 0
         }
-        if (SYSTEM.ONE_PLAYER) k.go('title')
+        if (SYSTEM.ONE_PLAYER) { stopGameOverSound(); k.go('title') }
     })
 
-    k.onKeyPress('enter', () => k.go('title'))
-    k.onKeyPress('space', () => k.go('title'))
+    k.onKeyPress('enter', () => { stopGameOverSound(); k.go('title') })
+    k.onKeyPress('space', () => { stopGameOverSound(); k.go('title') })
 })
 
 // ---------------------------------------------------------------------------
