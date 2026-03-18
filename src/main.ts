@@ -49,7 +49,7 @@ const ENEMY_PUNCH_COOLDOWN = 1.8
 const ENEMY_PUNCH_DAMAGE   = 10
 const ENEMY_AGGRO_RANGE    = 160
 
-const BOSS_MAX_HP          = 100
+const BOSS_MAX_HP          = 200
 const BOSS_SPEED           = 75
 const BOSS_PUNCH_REACH     = 40
 const BOSS_PUNCH_COOLDOWN  = 1.2
@@ -253,6 +253,7 @@ k.loadSprite('delivery-ride', '/sprites/delivery-enemy/delivery-enemy-ride.png',
 })
 
 k.loadSprite('pizza', '/pizza.png')
+k.loadSprite('keyfob', '/keyfob.jpg')
 
 // Boss - Evil Angel
 k.loadSprite('boss-walk', '/sprites/evil-angel/evil-angel-walk.png', {
@@ -664,6 +665,8 @@ k.scene('game', () => {
     let bossArenaCamX = 0
     let bossArenaLeft = 0
     let bossArenaRight = 0
+    let bossDeathX = 0
+    let bossDeathY = 0
 
     // ------------------------------------------------------------------
     // Enemy type and factory
@@ -973,7 +976,7 @@ k.scene('game', () => {
 
         if (es.hp <= 0) {
             es.dying = true
-            es.dyingTimer = es.isBoss ? 1.2 : 0.4
+            es.dyingTimer = es.isBoss ? 2.0 : 0.4
             // Drop dying enemies behind all living characters but above background
             enemy.body.z = 1
             enemy.shadow.z = 0.5
@@ -1254,12 +1257,16 @@ k.scene('game', () => {
             const es = enemy.state
 
             if (es.dying) {
-                const dyingDuration = es.isBoss ? 1.2 : 0.4
+                const dyingDuration = es.isBoss ? 2.0 : 0.4
                 es.dyingTimer -= dt
                 enemy.shadow.opacity = 0
                 if (es.dyingTimer <= 0) {
+                    if (es.isBoss) {
+                        bossDeathX = enemy.body.pos.x
+                        bossDeathY = es.groundY
+                        bossDefeated = true
+                    }
                     enemy.destroy()
-                    if (es.isBoss) bossDefeated = true
                 }
                 continue
             }
@@ -1435,11 +1442,146 @@ k.scene('game', () => {
             }
         }
 
-        // --- Boss victory ---
+        // --- Boss victory — keyfob drop ---
         if (bossDefeated) {
             bossDefeated = false
             waveEnemies = []
-            k.go('victory')
+
+            // Spawn keyfob that arcs out from boss death position
+            const KEYFOB_SIZE = 32
+            let keyfobVelX = (Math.random() < 0.5 ? 1 : -1) * 80
+            let keyfobVelY = -200
+            const keyfobGravity = 500
+            const keyfobLandY = bossDeathY
+            let keyfobLanded = false
+
+            const keyfob = k.add([
+                k.sprite('keyfob', { width: KEYFOB_SIZE, height: KEYFOB_SIZE }),
+                k.pos(bossDeathX, bossDeathY - 40),
+                k.anchor('bot'),
+                k.z(zFromY(bossDeathY) + 0.5),
+            ]) as any
+
+            const keyfobUpdate = k.onUpdate(() => {
+                const kdt = k.dt()
+
+                if (!keyfobLanded) {
+                    keyfobVelY += keyfobGravity * kdt
+                    keyfob.pos.x += keyfobVelX * kdt
+                    keyfob.pos.y += keyfobVelY * kdt
+                    if (keyfob.pos.y >= keyfobLandY) {
+                        keyfob.pos.y = keyfobLandY
+                        keyfobLanded = true
+                    }
+                }
+
+                // Pickup collision
+                const kdx = Math.abs(keyfob.pos.x - player.pos.x)
+                const kdy = Math.abs(keyfobLandY - ps.groundY)
+                if (keyfobLanded && kdx < 24 && kdy < 24) {
+                    keyfob.destroy()
+                    keyfobUpdate.cancel()
+                    showKeyfobPickup()
+                }
+            })
+        }
+
+        function showKeyfobPickup() {
+            // Dialogue box
+            const dialogBg = k.add([
+                k.rect(CANVAS_W - 20, 100),
+                k.color(rgb(10, 10, 30)),
+                k.opacity(0.9),
+                k.pos(CANVAS_W / 2, CANVAS_H / 2),
+                k.anchor('center'),
+                k.fixed(),
+                k.z(400),
+            ])
+
+            // Keyfob image
+            const keyfobImg = k.add([
+                k.sprite('keyfob', { width: 60, height: 60 }),
+                k.pos(40, CANVAS_H / 2),
+                k.anchor('center'),
+                k.fixed(),
+                k.z(401),
+            ])
+
+            // Text
+            const pickupText = k.add([
+                k.text("You got Walter's\nRC key!", { size: 16 }),
+                k.pos(80, CANVAS_H / 2 - 20),
+                k.color(rgb(255, 255, 100)),
+                k.fixed(),
+                k.z(401),
+            ])
+
+            // Press start prompt
+            const prompt = k.add([
+                k.text('PRESS START', { size: 10 }),
+                k.pos(CANVAS_W - 20, CANVAS_H / 2 + 38),
+                k.anchor('right'),
+                k.color(rgb(200, 200, 200)),
+                k.opacity(1),
+                k.fixed(),
+                k.z(401),
+            ])
+
+            let pFlash = 0
+            let pVisible = true
+            const pSub = k.onUpdate(() => {
+                pFlash += k.dt()
+                if (pFlash > 0.4) {
+                    pFlash = 0
+                    pVisible = !pVisible
+                    prompt.opacity = pVisible ? 1 : 0
+                }
+            })
+
+            let dismissed = false
+            function dismiss() {
+                if (dismissed) return
+                dismissed = true
+                dialogBg.destroy()
+                keyfobImg.destroy()
+                pickupText.destroy()
+                prompt.destroy()
+                pSub.cancel()
+                enterK.cancel()
+                spaceK.cancel()
+                zK.cancel()
+                jK.cancel()
+                fadeToEndVideo()
+            }
+
+            const enterK = k.onKeyPress('enter', dismiss)
+            const spaceK = k.onKeyPress('space', dismiss)
+            const zK = k.onKeyPress('z', dismiss)
+            const jK = k.onKeyPress('j', dismiss)
+        }
+
+        function fadeToEndVideo() {
+            // Fade to black
+            const blackOverlay = k.add([
+                k.rect(CANVAS_W, CANVAS_H),
+                k.color(rgb(0, 0, 0)),
+                k.opacity(0),
+                k.pos(0, 0),
+                k.fixed(),
+                k.z(500),
+            ])
+
+            let fadeTimer = 0
+            const FADE_DURATION = 1.0
+
+            const fadeSub = k.onUpdate(() => {
+                fadeTimer += k.dt()
+                blackOverlay.opacity = Math.min(1, fadeTimer / FADE_DURATION)
+                if (fadeTimer >= FADE_DURATION) {
+                    fadeSub.cancel()
+                    k.go('endvideo')
+                }
+            })
         }
 
         // --- Wave completion ---
@@ -1496,53 +1638,17 @@ k.scene('game', () => {
                         triggerSub.cancel()
                         // Lock scroll so player can't leave the boss arena
                         ps.scrollLimitX = player.pos.x + CANVAS_W / 2
-                        startBossIntro()
+                        const worldBossX = k.camPos().x
+                        const bossLandY = (STREET_Y_TOP + STREET_Y_BOTTOM) / 2
+                        showBossDialogue(worldBossX, bossLandY)
                     }
                 })
             }
         }
 
-        function startBossIntro() {
-            const bossLandX = CANVAS_W / 2
-            const bossLandY = (STREET_Y_TOP + STREET_Y_BOTTOM) / 2
-            const screenLandY = CANVAS_H / 2 + 20
-
-            // Boss flies down from top of screen (fixed/screen space)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const bossIntroSprite = k.add([
-                k.sprite('boss-walk'),
-                k.scale(BOSS_SCALE),
-                k.opacity(1),
-                k.pos(bossLandX, -150),
-                k.anchor('bot'),
-                k.z(300),
-                k.fixed(),
-            ]) as any
-            bossIntroSprite.play('walk')
-
-            let flyTimer = 0
-            const FLY_DURATION = 1.5
-
-            const flySub = k.onUpdate(() => {
-                flyTimer += k.dt()
-                const t = Math.min(1, flyTimer / FLY_DURATION)
-                // Ease-in landing (accelerate downward)
-                const ease = t * t
-                bossIntroSprite.pos.y = -150 + (screenLandY + 150) * ease
-
-                if (t >= 1) {
-                    flySub.cancel()
-                    // Convert screen X to world X for boss spawn
-                    const worldBossX = k.camPos().x
-                    showBossDialogue(worldBossX, bossLandY, bossIntroSprite)
-                }
-            })
-        }
-
         function showBossDialogue(
             bossLandX: number,
             bossLandY: number,
-            bossIntroSprite: ReturnType<typeof k.add>,
         ) {
             // Dialogue box background
             const dialogBg = k.add([
@@ -1609,7 +1715,6 @@ k.scene('game', () => {
                 spaceSub.cancel()
                 zSub.cancel()
                 jSub.cancel()
-                bossIntroSprite.destroy()
                 spawnBoss(bossLandX, bossLandY)
             }
 
@@ -1921,30 +2026,69 @@ k.scene('gameover', () => {
 // Victory Scene
 // ---------------------------------------------------------------------------
 
+k.scene('endvideo', () => {
+    stopLevel1Music()
+
+    k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(0, 0, 0)), k.pos(0, 0), k.fixed()])
+
+    const canvas = document.querySelector('canvas')!
+    const video = document.createElement('video')
+    video.src = '/level1-end.mp4'
+    video.playsInline = true
+    video.style.position = 'absolute'
+    video.style.top = canvas.offsetTop + 'px'
+    video.style.left = canvas.offsetLeft + 'px'
+    video.style.width = canvas.clientWidth + 'px'
+    video.style.height = canvas.clientHeight + 'px'
+    video.style.objectFit = 'cover'
+    video.style.zIndex = '9999'
+    canvas.parentElement!.appendChild(video)
+
+    video.play()
+
+    video.addEventListener('ended', () => {
+        video.remove()
+        k.go('victory')
+    })
+
+    function skip() {
+        video.pause()
+        video.remove()
+        k.go('victory')
+    }
+
+    k.onKeyPress('enter', skip)
+    k.onKeyPress('space', skip)
+
+    k.onUpdate(() => {
+        if (SYSTEM.ONE_PLAYER) skip()
+    })
+
+    k.onSceneLeave(() => {
+        video.remove()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Victory Scene
+// ---------------------------------------------------------------------------
+
 k.scene('victory', () => {
     stopLevel1Music()
 
     k.add([k.rect(CANVAS_W, CANVAS_H), k.color(rgb(10, 0, 20)), k.pos(0, 0), k.fixed()])
 
     k.add([
-        k.text('YOU WIN!', { size: 40 }),
-        k.pos(CANVAS_W / 2, 70),
+        k.text('This is SHAREWARE', { size: 22 }),
+        k.pos(CANVAS_W / 2, 50),
         k.anchor('center'),
         k.color(rgb(200, 0, 255)),
         k.fixed(),
     ])
 
     k.add([
-        k.text('The pizza is safe.', { size: 14 }),
-        k.pos(CANVAS_W / 2, 130),
-        k.anchor('center'),
-        k.color(rgb(220, 200, 255)),
-        k.fixed(),
-    ])
-
-    k.add([
-        k.text('Your girlfriend is free!', { size: 14 }),
-        k.pos(CANVAS_W / 2, 152),
+        k.text('If you want to play new\nlevels, mail 5$ check or\nmoney order to the address\nfound in the manual.', { size: 12, width: CANVAS_W - 40, align: 'center' }),
+        k.pos(CANVAS_W / 2, 100),
         k.anchor('center'),
         k.color(rgb(220, 200, 255)),
         k.fixed(),
