@@ -117,6 +117,7 @@ k.loadSprite('bridgestreet-bg', '/bridgestreet/bridge-street-bg.png')
 k.loadSound('titlemusic', '/Bridge Street Run.mp3')
 k.loadSound('level1music', '/Bridge Street Run LEVEL 1.mp3')
 k.loadSound('gameoversound', '/8d82b5_Sonic_Game_Over_Sound_Effect.mp3')
+k.loadSound('winsound', '/game-win.mp4')
 
 for (let i = 1; i <= 16; i++) {
     const num = String(i).padStart(2, '0')
@@ -276,6 +277,14 @@ k.loadSprite('boss-death', '/sprites/evil-angel/evil-angel-death.png', {
 
 let titleMusic: ReturnType<typeof k.play> | null = null
 let level1Music: ReturnType<typeof k.play> | null = null
+let winSound: ReturnType<typeof k.play> | null = null
+
+function stopWinSound() {
+    if (winSound) {
+        winSound.stop()
+        winSound = null
+    }
+}
 
 function stopTitleMusic() {
     if (titleMusic) {
@@ -916,7 +925,7 @@ k.scene('game', () => {
 
         if (applyKnockback) {
             es.knockback = true
-            es.knockbackTimer = KNOCKBACK_DURATION
+            es.knockbackTimer = es.isBoss ? KNOCKBACK_DURATION * 2 : KNOCKBACK_DURATION
             es.knockbackDir = dir
         }
 
@@ -1151,6 +1160,9 @@ k.scene('game', () => {
                         bossDeathX = enemy.body.pos.x
                         bossDeathY = es.groundY
                         bossDefeated = true
+                        bossArenaLocked = false
+                        stopLevel1Music()
+                        winSound = k.play('winsound')
                     }
                     enemy.destroy()
                 }
@@ -1451,6 +1463,7 @@ k.scene('game', () => {
         }
 
         function fadeToEndVideo() {
+            stopWinSound()
             // Fade to black
             const blackOverlay = k.add([
                 k.rect(CANVAS_W, CANVAS_H),
