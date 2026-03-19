@@ -44,7 +44,7 @@ const ENEMY_PUNCH_COOLDOWN = 1.8
 const ENEMY_PUNCH_DAMAGE   = 10
 const ENEMY_AGGRO_RANGE    = 160
 
-const BOSS_MAX_HP          = 150
+const BOSS_MAX_HP          = 112
 const BOSS_SPEED           = 75
 const BOSS_PUNCH_REACH     = 40
 const BOSS_PUNCH_COOLDOWN  = 1.2
