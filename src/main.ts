@@ -362,7 +362,7 @@ k.scene('title', () => {
         idleTimer += dt
         if (idleTimer > 10) k.go('intro')
 
-        if (SYSTEM.ONE_PLAYER) k.go('video')
+        if (SYSTEM.ONE_PLAYER || PLAYER_1.A || PLAYER_1.B) k.go('video')
     })
 
     // Any key press resets idle and starts the game
@@ -411,8 +411,12 @@ k.scene('video', () => {
     k.onKeyPress('enter', skip)
     k.onKeyPress('space', skip)
 
+    // Wait for start button to be released before allowing skip
+    // (prevents the title-screen press from immediately skipping)
+    let startReleased = false
     k.onUpdate(() => {
-        if (SYSTEM.ONE_PLAYER) skip()
+        if (!SYSTEM.ONE_PLAYER) startReleased = true
+        if (startReleased && SYSTEM.ONE_PLAYER) skip()
     })
 
     // Clean up if scene changes unexpectedly
@@ -1852,8 +1856,10 @@ k.scene('deathvideo', () => {
     k.onKeyPress('enter', skip)
     k.onKeyPress('space', skip)
 
+    let startReleased = false
     k.onUpdate(() => {
-        if (SYSTEM.ONE_PLAYER) skip()
+        if (!SYSTEM.ONE_PLAYER) startReleased = true
+        if (startReleased && SYSTEM.ONE_PLAYER) skip()
     })
 
     k.onSceneLeave(() => {
@@ -1922,7 +1928,7 @@ k.scene('gameover', () => {
             visible = !visible
             retry.opacity = visible ? 1 : 0
         }
-        if (SYSTEM.ONE_PLAYER) { stopGameOverSound(); k.go('title') }
+        if (SYSTEM.ONE_PLAYER || PLAYER_1.A || PLAYER_1.B) { stopGameOverSound(); k.go('title') }
     })
 
     k.onKeyPress('enter', () => { stopGameOverSound(); k.go('title') })
@@ -1967,8 +1973,10 @@ k.scene('endvideo', () => {
     k.onKeyPress('enter', skip)
     k.onKeyPress('space', skip)
 
+    let startReleased = false
     k.onUpdate(() => {
-        if (SYSTEM.ONE_PLAYER) skip()
+        if (!SYSTEM.ONE_PLAYER) startReleased = true
+        if (startReleased && SYSTEM.ONE_PLAYER) skip()
     })
 
     k.onSceneLeave(() => {
@@ -2020,7 +2028,7 @@ k.scene('victory', () => {
             visible = !visible
             cont.opacity = visible ? 1 : 0
         }
-        if (SYSTEM.ONE_PLAYER) k.go('title')
+        if (SYSTEM.ONE_PLAYER || PLAYER_1.A || PLAYER_1.B) k.go('title')
     })
 
     k.onKeyPress('enter', () => k.go('title'))
