@@ -34,7 +34,7 @@
     z-index: 0;
     object-fit: cover;
     opacity: 0.55;
-    filter: saturate(1.3) contrast(1.1);
+    /* no filter — saves GPU compositing on weak hardware */
   }
 
   /* Dark gradient overlay on video + fire glow at bottom */
@@ -67,13 +67,9 @@
       rgba(0,0,0,0.15) 3px,
       rgba(0,0,0,0.15) 4px
     );
-    animation: scanroll 8s linear infinite;
+    /* static scanlines — no animation, saves full-screen repaints */
   }
 
-  @keyframes scanroll {
-    0%   { background-position: 0 0; }
-    100% { background-position: 0 400px; }
-  }
 
   /* ── CRT VIGNETTE ── */
   #vignette {
@@ -138,9 +134,7 @@
     font-size: clamp(3.5rem, 14vw, 8rem);
     color: #fff;
     text-shadow:
-      0 0 10px rgba(255,255,255,0.8),
-      0 0 30px rgba(255,102,0,0.9),
-      0 0 60px rgba(255,102,0,0.6),
+      0 0 20px rgba(255,102,0,0.9),
       4px 4px 0 #330000;
     animation: title-shake 6s ease-in-out infinite;
     letter-spacing: 0.05em;
@@ -163,9 +157,7 @@
     font-size: clamp(2.5rem, 10vw, 5.5rem);
     color: var(--neon-blue);
     text-shadow:
-      0 0 10px var(--neon-blue),
-      0 0 30px var(--neon-blue),
-      0 0 60px rgba(0,150,255,0.5),
+      0 0 20px var(--neon-blue),
       3px 3px 0 #001133;
     animation: neon-flicker-blue 4s ease-in-out infinite;
     letter-spacing: 0.08em;
@@ -178,9 +170,7 @@
     font-size: clamp(4rem, 16vw, 9rem);
     color: var(--neon-orange);
     text-shadow:
-      0 0 10px var(--neon-orange),
-      0 0 30px var(--neon-orange),
-      0 0 80px rgba(255,80,0,0.7),
+      0 0 20px var(--neon-orange),
       5px 5px 0 #330d00;
     animation: neon-flicker-orange 7s ease-in-out infinite;
     letter-spacing: 0.05em;
@@ -245,7 +235,6 @@
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    animation: glow-pulse 3s ease-in-out infinite;
   }
 
   #only-on-rcade-text {
@@ -264,37 +253,10 @@
       0 0 25px rgba(255,255,255,0.3),
       2px 2px 0 rgba(0,0,0,0.8),
       -1px -1px 0 rgba(0,0,0,0.5);
-    filter: url(#spraypaint);
     text-align: center;
     padding-bottom: 2vh;
   }
 
-  /* spray paint drips */
-  #only-on-rcade-text::before {
-    content: '';
-    position: absolute;
-    bottom: -6px;
-    right: 15%;
-    width: 3px;
-    height: 14px;
-    background: #fff;
-    opacity: 0.6;
-    border-radius: 0 0 2px 2px;
-    filter: blur(0.5px);
-  }
-
-  #only-on-rcade-text::after {
-    content: '';
-    position: absolute;
-    bottom: -10px;
-    right: 40%;
-    width: 2px;
-    height: 9px;
-    background: #fff;
-    opacity: 0.4;
-    border-radius: 0 0 2px 2px;
-    filter: blur(0.5px);
-  }
 
   #rcade-img-center {
     position: relative;
@@ -302,10 +264,7 @@
     max-height: 55vh;
     max-width: 70%;
     object-fit: contain;
-    filter:
-      drop-shadow(0 0 15px rgba(0,170,255,0.8))
-      drop-shadow(0 0 35px rgba(0,100,255,0.5))
-      drop-shadow(0 6px 12px rgba(0,0,0,0.9));
+    filter: drop-shadow(0 0 12px rgba(0,170,255,0.7));
     animation: rcade-entrance 1s 1.8s cubic-bezier(0.22, 1, 0.36, 1) both,
                cabinet-bob 5s 2.8s ease-in-out infinite;
   }
@@ -342,35 +301,22 @@
   }
 
   @keyframes neon-flicker-blue {
-    0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-      text-shadow:
-        0 0 10px var(--neon-blue),
-        0 0 30px var(--neon-blue),
-        0 0 60px rgba(0,150,255,0.5),
-        3px 3px 0 #001133;
+    0%, 19%, 21%, 54%, 56%, 100% {
+      text-shadow: 0 0 20px var(--neon-blue), 3px 3px 0 #001133;
     }
-    20%, 24%, 55% { text-shadow: none; }
+    20%, 55% { text-shadow: 3px 3px 0 #001133; }
   }
 
   @keyframes neon-flicker-orange {
-    0%, 39%, 41%, 43%, 45%, 74%, 76%, 100% {
-      text-shadow:
-        0 0 10px var(--neon-orange),
-        0 0 30px var(--neon-orange),
-        0 0 80px rgba(255,80,0,0.7),
-        5px 5px 0 #330d00;
+    0%, 39%, 41%, 74%, 76%, 100% {
+      text-shadow: 0 0 20px var(--neon-orange), 5px 5px 0 #330d00;
     }
-    40%, 44%, 75% { text-shadow: 5px 5px 0 #330d00; }
+    40%, 75% { text-shadow: 5px 5px 0 #330d00; }
   }
 
   @keyframes pulse-text {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.7; }
-  }
-
-  @keyframes glow-pulse {
-    0%, 100% { opacity: 0.8; transform: translateX(-50%) scaleX(1); }
-    50%      { opacity: 1.0; transform: translateX(-50%) scaleX(1.08); }
   }
 
   @keyframes pop-in {
@@ -409,16 +355,6 @@
 </style>
 </head>
 <body>
-
-<!-- SVG filter for spray paint texture -->
-<svg width="0" height="0" style="position:absolute">
-  <defs>
-    <filter id="spraypaint">
-      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise"/>
-      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-  </defs>
-</svg>
 
 <!-- Background video -->
 <video id="bg-video" autoplay muted loop playsinline>
@@ -469,7 +405,12 @@
   const canvas = document.getElementById('ember-canvas');
   const ctx = canvas.getContext('2d');
   let particles = [];
-  const MAX = 200;
+  const MAX = 80;
+  // Pre-compute colors to avoid string allocation per frame
+  const COLORS = [];
+  for (let h = 5; h < 50; h += 3) {
+    COLORS.push(`hsl(${h}, 100%, 65%)`);
+  }
 
   function resize() {
     canvas.width  = window.innerWidth;
@@ -477,7 +418,6 @@
   }
 
   function spawn() {
-    // cluster more particles toward bottom edges for a fire-wall look
     const edge = Math.random() < 0.4;
     const x = edge
       ? (Math.random() < 0.5 ? Math.random() * canvas.width * 0.25 : canvas.width - Math.random() * canvas.width * 0.25)
@@ -490,7 +430,7 @@
       life:  1.0,
       decay: Math.random() * 0.005 + 0.002,
       size:  Math.random() * 5 + 1.5,
-      hue:   Math.random() * 45 + 5,
+      ci:    Math.floor(Math.random() * COLORS.length),
     });
   }
 
@@ -498,10 +438,11 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     while (particles.length < MAX) spawn();
 
+    // No shadowBlur — draw each particle twice (big soft + small bright)
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x  += p.vx + Math.sin(Date.now() * 0.001 + i) * 0.3;
-      p.y  += p.vy;
+      p.x += p.vx;
+      p.y += p.vy;
       p.life -= p.decay;
 
       if (p.life <= 0 || p.y < -10) {
@@ -509,15 +450,16 @@
         continue;
       }
 
-      const alpha = p.life * 0.85;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${p.hue}, 100%, 65%, ${alpha})`;
-      ctx.shadowBlur  = 18;
-      ctx.shadowColor = `hsla(${p.hue}, 100%, 50%, 0.9)`;
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      const r = p.size * p.life;
+      // Soft glow (larger, transparent)
+      ctx.globalAlpha = p.life * 0.3;
+      ctx.fillStyle = COLORS[p.ci];
+      ctx.fillRect(p.x - r * 2, p.y - r * 2, r * 4, r * 4);
+      // Bright core
+      ctx.globalAlpha = p.life * 0.85;
+      ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
     }
+    ctx.globalAlpha = 1;
     requestAnimationFrame(draw);
   }
 
