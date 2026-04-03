@@ -3,7 +3,7 @@
   "name": "streets-of-rainy-city",
   "display_name": "Streets of rainy-city.com",
   "description": "An evil satanic cult has kidnapped your girlfriend while you were out buying a pizza! Your girlfriend will be The Final Sacrifice! Only you, and your trusty kung-fu powers, can defeat them and save your girlfriend before the pizza gets cold!",
-  "visibility": "internal",
+  "visibility": "public",
   "authors": [
     {
       "display_name": "john aiken @mnky9800n"
